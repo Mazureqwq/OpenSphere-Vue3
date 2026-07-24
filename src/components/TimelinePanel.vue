@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed} from 'vue';
 import {useMapStore} from '@/stores/map';
 import type {TimeRange} from '@/types/gis';

@@ -2,6 +2,7 @@ import {computed, markRaw, ref, toRaw} from 'vue';
 import {defineStore} from 'pinia';
 import {applyCategoryStyle, applyVectorStyle, getTimeBounds, getVectorFeatures, matchesFeatureQuery} from '@/map/styles';
 import type BaseLayer from 'ol/layer/Base';
+import {getFallbackSelectedLayerId} from '@/core/mapInteraction.js';
 import type {BaseMapOption, CategoryStyleRule, FeatureQueryConfig, LayerRecord, MapEngine, QueryResult, SelectedFeatureInfo, TimeFilterConfig, TimeRange, VectorStyleConfig} from '@/types/gis';
 
 const tiandituToken = import.meta.env.VITE_TDT_TOKEN?.trim();
@@ -66,7 +67,7 @@ export const useMapStore = defineStore('map', () => {
   }
   function setBaseMap(id: string) { activeBaseMapId.value = baseMaps.some((item) => item.id === id) ? id : baseMaps[0].id; }
   function setMapEngine(engine: MapEngine) { mapEngine.value = engine; }
-  function removeLayer(id: string) { layers.value = layers.value.filter((layer) => layer.id !== id); if (selectedLayerId.value === id) selectedLayerId.value = layers.value.at(-1)?.id; if (selectedFeature.value?.layerId === id) selectedFeature.value = undefined; if (query.value?.layerId === id) query.value = undefined; }
+  function removeLayer(id: string) { layers.value = layers.value.filter((layer) => layer.id !== id); if (selectedLayerId.value === id) selectedLayerId.value = getFallbackSelectedLayerId(layers.value, id, selectedLayerId.value); if (selectedFeature.value?.layerId === id) selectedFeature.value = undefined; if (query.value?.layerId === id) query.value = undefined; }
   function setLayerVisible(id: string, visible: boolean) { const layer = layers.value.find((item) => item.id === id); if (layer) { layer.visible = visible; layer.source.setVisible(visible); } }
   function setLayerOpacity(id: string, opacity: number) { const layer = layers.value.find((item) => item.id === id); if (layer) { layer.opacity = opacity; layer.source.setOpacity(opacity); } }
   function setVectorStyle(id: string, style: VectorStyleConfig) { const layer = layers.value.find((item) => item.id === id); if (!layer?.vectorStyle) return; layer.vectorStyle = {...style}; renderLayer(toRaw(layer) as unknown as LayerRecord); }

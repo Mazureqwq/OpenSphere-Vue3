@@ -1,4 +1,4 @@
-﻿import { defineConfig } from "vite";
+import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 import { viteStaticCopy } from "vite-plugin-static-copy";
 
@@ -20,12 +20,5 @@ export default defineConfig({
   resolve: { alias: { "@": "/src" } },
   server: {
     port: 5173,
-    proxy: {
-      "/api": {
-        target: "https://ai98pro.xyz/",
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, ""),
-      },
-    },
   },
 });

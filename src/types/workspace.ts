@@ -1,4 +1,4 @@
-﻿import type {CategoryStyleRule, FeatureQueryConfig, TimeFilterConfig, TimeRange, VectorStyleConfig} from '@/types/gis';
+import type {CategoryStyleRule, FeatureQueryConfig, TimeFilterConfig, TimeRange, VectorStyleConfig} from '@/types/gis';
 
 export interface MapViewState { center: [number, number]; zoom: number; rotation: number; }
 

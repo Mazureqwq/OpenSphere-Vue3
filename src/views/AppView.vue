@@ -1,14 +1,6 @@
 <script setup lang="ts">
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  ref,
-  toRaw,
-  watch,
-} from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ref, toRaw, watch } from "vue";
+import { ElMessage } from "element-plus";
 import {
   Collection,
   Delete,
@@ -34,10 +26,8 @@ import TimeFieldPanel from "@/components/TimeFieldPanel.vue";
 import TimelinePanel from "@/components/TimelinePanel.vue";
 import VectorStylePanel from "@/components/VectorStylePanel.vue";
 import WmsLayerDialog from "@/components/WmsLayerDialog.vue";
-import {
-  createDrawingLayer as createDrawingRecord,
-  type DrawMode,
-} from "@/map/drawing";
+import { createVectorLayer, type DrawMode } from "@/map/drawing";
+import { getLayerName } from "@/core/mapInteraction.js";
 import {
   importCsv,
   importGeoJson,
@@ -46,35 +36,22 @@ import {
   importKmz,
   importShapefile,
 } from "@/map/importers";
-import { createWmsLayer, type WmsLayerInput } from "@/map/ogc";
-import {
-  createRealtimeLayer,
-  RealtimeTrackService,
-  type RealtimeStatus,
-} from "@/map/realtime";
-import {
-  buildPlaybackTracks,
-  getPlaybackPosition,
-  TrackPlaybackController,
-  type PlaybackTrack,
-  type TrackPlaybackState,
-} from "@/map/trackPlayback";
-import { SearchService } from "@/search/SearchService";
-import type { SearchResult } from "@/search/types";
+
+
 import { useMapStore } from "@/stores/map";
-import {
-  clearWorkspace,
-  createSnapshot,
-  loadWorkspace,
-  restoreLayers,
-  saveWorkspace,
-} from "@/workspace";
-import type {
-  BaseMapOption,
-  LayerRecord,
-  PointVisualizationConfig,
-} from "@/types/gis";
+import type { BaseMapOption, LayerRecord, PointVisualizationConfig } from "@/types/gis";
+import { getPlaybackPosition, type PlaybackTrack } from "@/map/trackPlayback";
 import type { MapViewState } from "@/types/workspace";
+import { useWorkspacePersistence } from "@/composables/useWorkspacePersistence";
+import { useDrawingSession } from "@/composables/useDrawingSession";
+import {
+  useLayerActions,
+  type LayerImportHandler,
+} from "@/composables/useLayerActions";
+import { useRealtimeTracking } from "@/composables/useRealtimeTracking";
+import { useSearch } from "@/composables/useSearch";
+import { useTrackPlayback } from "@/composables/useTrackPlayback";
+import { usePointVisualization } from "@/composables/usePointVisualization";
 
 const mapStore = useMapStore();
 const mapView = ref<{
@@ -104,34 +81,119 @@ const mapView = ref<{
   ) => void;
   clearTrackPlayback: () => void;
   locateCoordinate: (coordinate: [number, number]) => void;
+  focusCoordinate: (coordinate: [number, number]) => void;
   clearCoordinateLocation: () => void;
 }>();
 const showWmsDialog = ref(false);
-const workspaceReady = ref(false);
 const currentView = ref<MapViewState>({
   center: [113.6254, 34.7466],
   zoom: 5,
   rotation: 0,
 });
 const measurement = ref<string>();
-const searchResults = ref<SearchResult[]>([]);
-const searchLoading = ref(false);
-const searchService = new SearchService();
-let searchSequence = 0;
-let saveTimer: ReturnType<typeof setTimeout> | undefined;
-const playbackTracks = ref<PlaybackTrack[]>([]);
-const playbackState = ref<TrackPlaybackState>({ playing: false, speed: 1 });
-const playbackFollow = ref(false);
-let playbackSourceLayerId: string | undefined;
-const playbackController = new TrackPlaybackController((state) => {
-  playbackState.value = state;
-  renderTrackPlayback();
+const importers: Record<string, LayerImportHandler> = {
+  csv: importCsv,
+  geojson: importGeoJson,
+  json: importGeoJson,
+  kml: importKml,
+  kmz: importKmz,
+  gpx: importGpx,
+  zip: importShapefile,
+};
+const {
+  addLayer,
+  handleFiles,
+  addWmsLayer,
+  handleRemoveLayer,
+  editLayer,
+  exportLayer,
+} = useLayerActions({
+  mapStore,
+  mapView,
+  importers,
+  onBeforeRemove: (layer) => {
+    if (layer.drawing) stopDrawing();
+    if (layer.realtime) stopRealtimeTracking();
+    if (layer.id === playbackSourceLayerId.value) clearTrackPlayback();
+  },
+  onEdit: (layer) => {
+    startDrawingSession(layer.id, true);
+    activeTool.value = "drawing";
+  },
 });
-const realtimeStatus = ref<RealtimeStatus>("disconnected");
-const realtimeTrackCount = ref(0);
-const realtimeLastUpdated = ref<string>();
-const realtimeError = ref<string>();
-let realtimeLayerId: string | undefined;
+const {
+  status: realtimeStatus,
+  trackCount: realtimeTrackCount,
+  lastUpdated: realtimeLastUpdated,
+  error: realtimeError,
+  layerId: realtimeLayerId,
+  connect: connectRealtime,
+  disconnect: disconnectRealtime,
+  startSimulation: startRealtimeSimulation,
+  stopSimulation: stopRealtimeSimulation,
+  stop: stopRealtimeTracking,
+} = useRealtimeTracking({
+  mapStore,
+  mapView,
+  addLayer,
+});
+const {
+  scheduleWorkspaceSave,
+  saveWorkspaceNow,
+  restoreWorkspaceState,
+  clearWorkspaceState,
+} = useWorkspacePersistence({
+  mapStore,
+  mapView,
+  currentView,
+  onBeforeRestore: () => {
+    stopRealtimeTracking();
+    clearTrackPlayback();
+  },
+  onBeforeClear: () => {
+    stopRealtimeTracking();
+    clearTrackPlayback();
+  },
+});
+const {
+  drawingSessionLayerId,
+  drawingEditing,
+  activeDrawingMode,
+  start: startDrawingSession,
+  setDrawMode,
+  cancelCurrentDrawing,
+  stopDrawing,
+  deleteSelectedDrawingFeatures,
+} = useDrawingSession({
+  mapStore,
+  mapView,
+  measurement,
+});
+const pointerCoordinate = ref<[number, number]>();
+const {
+  results: searchResults,
+  loading: searchLoading,
+  service: searchService,
+  search,
+  clear: clearSearch,
+  select: selectSearchResult,
+} = useSearch({ mapStore, mapView, currentView });
+const {
+  tracks: playbackTracks,
+  state: playbackState,
+  follow: playbackFollow,
+  controller: playbackController,
+  selectTrack: selectPlaybackTrack,
+  play: playTrackPlayback,
+  pause: pauseTrackPlayback,
+  seek: seekTrackPlayback,
+  setSpeed: setPlaybackSpeed,
+  load: loadTrackPlayback,
+  setFollow: setPlaybackFollow,
+  clear: clearTrackPlayback,
+  sourceLayerId: playbackSourceLayerId,
+} = useTrackPlayback({ mapStore, mapView });
+const { apply: applyPointVisualization, clear: clearPointVisualization } = usePointVisualization({ mapStore, mapView });
 type ToolId =
   | "layers"
   | "realtime"
@@ -162,97 +224,21 @@ const toolTitles: Record<ToolId, string> = {
   timeline: "时间轴",
   feature: "要素信息",
 };
-const realtimeService = new RealtimeTrackService(
-  (state) => {
-    realtimeStatus.value = state.status;
-    realtimeTrackCount.value = state.trackCount;
-    realtimeLastUpdated.value = state.lastUpdated;
-    realtimeError.value = state.error;
-    if (realtimeLayerId) mapStore.refreshFeatureCount(realtimeLayerId);
-  },
-  (layer) => mapView.value?.syncRealtimeLayer(layer),
-);
-
-type ImportHandler = (file: File) => Promise<LayerRecord>;
-const importers: Record<string, ImportHandler> = {
-  csv: importCsv,
-  geojson: importGeoJson,
-  json: importGeoJson,
-  kml: importKml,
-  kmz: importKmz,
-  gpx: importGpx,
-  zip: importShapefile,
-};
-const workspaceState = computed(() => ({
-  baseMapId: mapStore.activeBaseMapId,
-  selectedLayerId: mapStore.selectedLayerId,
-  timeEnabled: mapStore.timeEnabled,
-  timeCursor: mapStore.timeCursor,
-  timeRange: mapStore.timeRange,
-  query: mapStore.query,
-  layers: mapStore.layers
-    .filter((layer) => !layer.realtime)
-    .map((layer) => ({
-      id: layer.id,
-      visible: layer.visible,
-      opacity: layer.opacity,
-      vectorStyle: layer.vectorStyle,
-      categoryStyle: layer.categoryStyle,
-      timeFilter: layer.timeFilter,
-      drawing: layer.drawing,
-      featureCount: layer.featureCount,
-    })),
-}));
-
-onMounted(async () => {
-  await nextTick();
-  restoreWorkspaceState(false);
-  workspaceReady.value = true;
-});
-onBeforeUnmount(() => {
-  if (saveTimer) clearTimeout(saveTimer);
-  searchService.dispose();
-  realtimeService.dispose();
-  playbackController.dispose();
-});
-
-watch(workspaceState, () => scheduleWorkspaceSave(), { deep: true });
-
-async function handleFiles(files: FileList | null) {
-  if (!files?.length) return;
-  for (const file of Array.from(files)) {
-    const extension = file.name.split(".").pop()?.toLowerCase();
-    const importer = extension ? importers[extension] : undefined;
-    if (!importer) {
-      ElMessage.warning(`${file.name} 不是支持的空间文件格式`);
-      continue;
-    }
-    try {
-      if (extension === "zip" || extension === "kmz")
-        ElMessage.info(`正在后台解析 ${file.name}`);
-      const layer = await importer(file);
-      addLayer(layer, true);
-      ElMessage.success(`已导入 ${file.name}，地图已定位到数据范围`);
-    } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : "文件导入失败");
-    }
-  }
-}
-function addLayer(layer: LayerRecord, zoomToLayer = false) {
-  mapStore.addLayer(layer);
-  mapView.value?.addLayer(layer, zoomToLayer);
-}
-
-function addWmsLayer(input: WmsLayerInput) {
-  addLayer(createWmsLayer(input));
-  ElMessage.success(`已添加 WMS 图层：${input.name}`);
-}
-
 function handleBaseMapChange() {
   mapView.value?.setBaseMap(mapStore.activeBaseMap);
 }
 function toggleTool(tool: ToolId) {
+  if (activeTool.value === "drawing" && tool !== "drawing") stopDrawing();
+  const openingDrawing = tool === "drawing" && activeTool.value !== "drawing";
   activeTool.value = activeTool.value === tool ? undefined : tool;
+  if (openingDrawing && !drawingSessionLayerId.value) {
+    const layer = mapStore.layers.find((item) => item.drawing);
+    if (layer) startDrawingSession(layer.id);
+  }
+}
+function closeActiveTool() {
+  if (activeTool.value === "drawing") stopDrawing();
+  activeTool.value = undefined;
 }
 function locateCoordinate(coordinate: [number, number]) {
   if (!mapView.value) {
@@ -264,190 +250,30 @@ function locateCoordinate(coordinate: [number, number]) {
     "已定位到 " + coordinate[0].toFixed(6) + ", " + coordinate[1].toFixed(6),
   );
 }
-async function search(term: string) {
-  const sequence = ++searchSequence;
-  searchLoading.value = true;
-  const { results } = await searchService.search(term, {
-    layers: mapStore.layers.map(
-      (layer) => toRaw(layer) as unknown as LayerRecord,
-    ),
-    view: mapView.value?.getViewState() ?? currentView.value,
-    limit: 12,
-  });
-  if (sequence !== searchSequence) return;
-  searchResults.value = results;
-  searchLoading.value = false;
-}
-function clearSearch() {
-  searchSequence += 1;
-  searchLoading.value = false;
-  searchResults.value = [];
-  searchService.dispose();
-}
-function selectSearchResult(result: SearchResult) {
-  const [longitude, latitude] = result.coordinate;
-  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) {
-    ElMessage.warning("该搜索结果不包含可用坐标");
-    return;
-  }
-  locateCoordinate(result.coordinate);
-}
-function renderTrackPlayback() {
-  const track = playbackTracks.value.find(
-    (item) => item.id === playbackState.value.trackId,
-  );
-  const timestamp = playbackState.value.currentTime;
-  if (!track || timestamp === undefined || !playbackSourceLayerId) {
-    mapView.value?.clearTrackPlayback();
-    return;
-  }
-  mapView.value?.setTrackPlayback(
-    playbackSourceLayerId,
-    track,
-    getPlaybackPosition(track, timestamp),
-    playbackFollow.value,
-  );
-}
-function loadTrackPlayback(
-  layerId: string,
-  idField: string,
-  timeField: string,
-) {
-  const layer = mapStore.layers.find((item) => item.id === layerId);
-  if (!layer?.vectorStyle) {
-    ElMessage.warning("请选择包含点要素的矢量图层");
-    return;
-  }
-  const tracks = buildPlaybackTracks(
-    toRaw(layer) as unknown as LayerRecord,
-    idField,
-    timeField,
-  );
-  if (!tracks.length) {
-    ElMessage.warning("未解析到至少含两个不同时刻点位的轨迹");
-    return;
-  }
-  playbackSourceLayerId = layer.id;
-  playbackTracks.value = tracks;
-  playbackController.load(tracks);
-  mapStore.selectedLayerId = layer.id;
-  ElMessage.success(`已解析 ${tracks.length} 条可回放轨迹`);
-}
-function setPlaybackFollow(value: boolean) {
-  playbackFollow.value = value;
-  renderTrackPlayback();
-}
-function clearTrackPlayback() {
-  playbackController.clear();
-  playbackTracks.value = [];
-  playbackSourceLayerId = undefined;
-  mapView.value?.clearTrackPlayback();
-}
-function applyPointVisualization(
-  layerId: string,
-  config: PointVisualizationConfig,
-) {
-  const layer = mapStore.layers.find((item) => item.id === layerId);
-  if (!layer?.vectorStyle) {
-    ElMessage.warning("请选择包含点要素的矢量图层");
-    return;
-  }
-  const applied =
-    mapView.value?.setPointVisualization(
-      toRaw(layer) as unknown as LayerRecord,
-      config,
-    ) ?? false;
-  if (!applied) {
-    ElMessage.warning("当前图层没有可用于展示的点要素");
-    return;
-  }
-  mapStore.selectedLayerId = layer.id;
-  ElMessage.success(
-    config.mode === "heatmap" ? "已应用热力展示" : "已应用聚合气泡展示",
-  );
-}
-function clearPointVisualization() {
-  mapView.value?.clearPointVisualization();
-  ElMessage.info("已恢复原始点位展示");
-}
-function ensureRealtimeLayer() {
-  const existing = realtimeLayerId
-    ? mapStore.layers.find((layer) => layer.id === realtimeLayerId)
-    : undefined;
-  if (existing) return toRaw(existing) as unknown as LayerRecord;
-  const layer = createRealtimeLayer();
-  addLayer(layer);
-  realtimeLayerId = layer.id;
-  realtimeService.attachLayer(layer);
-  return layer;
-}
-function connectRealtime(url: string) {
-  const layer = ensureRealtimeLayer();
-  try {
-    realtimeService.connect(url);
-    mapStore.selectedLayerId = layer.id;
-  } catch (error) {
-    ElMessage.error(
-      error instanceof Error ? error.message : "WebSocket 连接失败",
-    );
-  }
-}
-function startRealtimeSimulation() {
-  const layer = ensureRealtimeLayer();
-  realtimeService.startSimulation();
-  mapStore.selectedLayerId = layer.id;
-}
-function stopRealtimeTracking() {
-  realtimeService.detachLayer();
-  realtimeLayerId = undefined;
-}
-function handleRemoveLayer(id: string) {
-  const layer = mapStore.layers.find((item) => item.id === id);
-  if (layer?.drawing) mapView.value?.setDrawMode();
-  if (layer?.realtime) stopRealtimeTracking();
-  if (layer?.id === playbackSourceLayerId) clearTrackPlayback();
-  mapView.value?.removeLayer(id);
-  mapStore.removeLayer(id);
-}
+
+
+
 function handleViewChange(state: MapViewState) {
   currentView.value = state;
   scheduleWorkspaceSave();
 }
-function createDrawingLayer() {
-  const existing = mapStore.layers.find((layer) => layer.drawing);
-  if (existing) {
-    mapStore.selectedLayerId = existing.id;
-    ElMessage.info("绘制图层已存在");
-    return;
-  }
-  addLayer(createDrawingRecord());
-  ElMessage.success("已创建绘制图层");
-}
-function setDrawMode(mode: DrawMode) {
-  const layer = mapStore.layers.find((item) => item.drawing);
-  if (!layer) {
-    ElMessage.warning("请先创建绘制图层");
-    return;
-  }
+function createDrawingLayer(
+  name?: string,
+  layerType: "drawing" | "vector" = "drawing",
+) {
+  const drawingCount = mapStore.layers.filter((item) => item.drawing).length;
+  const vectorCount = mapStore.layers.filter(
+    (item) => item.kind === "vector" && !item.drawing,
+  ).length;
+  const isDrawingLayer = layerType === "drawing";
+  const layer = createVectorLayer(
+    getLayerName({ name, layerType, drawingCount, vectorCount }),
+    isDrawingLayer,
+  );
+  addLayer(layer);
   mapStore.selectedLayerId = layer.id;
-  mapView.value?.setDrawMode(mode, toRaw(layer) as unknown as LayerRecord);
-}
-function stopDrawing() {
-  mapView.value?.setDrawMode();
-  measurement.value = undefined;
-}
-function deleteSelectedDrawingFeatures() {
-  const layer = mapStore.layers.find((item) => item.drawing);
-  const deleted =
-    mapView.value?.deleteSelectedDrawingFeatures(
-      layer ? (toRaw(layer) as unknown as LayerRecord) : undefined,
-    ) ?? 0;
-  if (!deleted) {
-    ElMessage.info("请先点击选中绘制要素");
-    return;
-  }
-  if (layer) mapStore.refreshFeatureCount(layer.id);
-  ElMessage.success(`已删除 ${deleted} 个绘制要素`);
+  startDrawingSession(layer.id);
+  ElMessage.success(`已创建${layer.name}`);
 }
 function requestSpatialQuery() {
   mapView.value?.startSpatialQuery((extent) => {
@@ -465,91 +291,11 @@ function focusQueryResult(layerId: string, featureId: string) {
     );
 }
 function handleDrawingChange() {
-  const layer = mapStore.layers.find((item) => item.drawing);
+  const layer = mapStore.layers.find(
+    (item) => item.id === drawingSessionLayerId.value && item.kind === "vector",
+  );
   if (layer) mapStore.refreshFeatureCount(layer.id);
   scheduleWorkspaceSave();
-}
-
-function persistWorkspace() {
-  const view = mapView.value?.getViewState() ?? currentView.value;
-  saveWorkspace(
-    createSnapshot({
-      baseMapId: mapStore.activeBaseMapId,
-      selectedLayerId: mapStore.selectedLayerId,
-      timeEnabled: mapStore.timeEnabled,
-      timeCursor: mapStore.timeCursor,
-      timeRange: mapStore.timeRange,
-      query: mapStore.query,
-      view,
-      layers: mapStore.layers.map(
-        (layer) => toRaw(layer) as unknown as LayerRecord,
-      ),
-    }),
-  );
-}
-
-function scheduleWorkspaceSave() {
-  if (!workspaceReady.value) return;
-  if (saveTimer) clearTimeout(saveTimer);
-  saveTimer = setTimeout(persistWorkspace, 400);
-}
-
-function saveWorkspaceNow() {
-  persistWorkspace();
-  ElMessage.success("工作区已保存到当前浏览器");
-}
-
-function restoreWorkspaceState(notify = true) {
-  const snapshot = loadWorkspace();
-  if (!snapshot) {
-    if (notify) ElMessage.info("未找到已保存的工作区");
-    return;
-  }
-
-  workspaceReady.value = false;
-  stopRealtimeTracking();
-  clearTrackPlayback();
-  mapView.value?.clearLayers();
-  mapStore.clearLayers();
-  mapStore.setBaseMap(snapshot.baseMapId);
-  mapStore.timeEnabled = snapshot.timeEnabled;
-  mapStore.timeCursor = snapshot.timeCursor;
-  mapStore.setTimeRange(snapshot.timeRange);
-  mapStore.setQuery(snapshot.query);
-  mapStore.selectedLayerId = snapshot.selectedLayerId;
-  mapView.value?.setBaseMap(mapStore.activeBaseMap);
-
-  try {
-    const restored = restoreLayers(snapshot);
-    mapStore.replaceLayers(restored);
-    mapStore.refreshFilters();
-    restored.forEach((layer) => mapView.value?.addLayer(layer));
-    currentView.value = snapshot.view;
-    mapView.value?.setViewState(snapshot.view);
-    if (notify) ElMessage.success(`已恢复工作区：${restored.length} 个图层`);
-  } catch (error) {
-    ElMessage.error(
-      error instanceof Error
-        ? `工作区恢复失败：${error.message}`
-        : "工作区恢复失败",
-    );
-  } finally {
-    workspaceReady.value = true;
-  }
-}
-
-async function clearWorkspaceState() {
-  await ElMessageBox.confirm(
-    "这将移除浏览器保存的工作区，并清空当前地图中的业务图层。",
-    "清空工作区",
-    { confirmButtonText: "清空", cancelButtonText: "取消", type: "warning" },
-  );
-  clearWorkspace();
-  stopRealtimeTracking();
-  clearTrackPlayback();
-  mapView.value?.clearLayers();
-  mapStore.clearLayers();
-  ElMessage.success("工作区已清空");
 }
 </script>
 
@@ -689,6 +435,7 @@ async function clearWorkspaceState() {
         <MapView
           ref="mapView"
           @view-change="handleViewChange"
+          @pointer-change="(coordinate) => (pointerCoordinate = coordinate)"
           @measurement-change="(value) => (measurement = value)"
           @drawing-change="handleDrawingChange" />
         <aside v-if="activeTool" class="tool-dock">
@@ -697,7 +444,7 @@ async function clearWorkspaceState() {
             ><button
               type="button"
               aria-label="关闭工具面板"
-              @click="activeTool = undefined">
+              @click="closeActiveTool">
               ×
             </button>
           </header>
@@ -705,7 +452,10 @@ async function clearWorkspaceState() {
             <LayerWorkspacePanel
               v-if="activeTool === 'layers'"
               :view="currentView"
+              @create="createDrawingLayer"
               @remove="handleRemoveLayer"
+              @edit="editLayer"
+              @export="exportLayer"
               @locate="locateCoordinate"
               @base-map="handleBaseMapChange"
               @request-spatial="requestSpatialQuery"
@@ -716,11 +466,9 @@ async function clearWorkspaceState() {
               :last-updated="realtimeLastUpdated"
               :error="realtimeError"
               @connect="connectRealtime"
-              @disconnect="realtimeService.disconnect()"
+              @disconnect="disconnectRealtime"
               @start-simulation="startRealtimeSimulation"
-              @stop-simulation="
-                realtimeService.stopSimulation()
-              " /><PointVisualizationPanel
+              @stop-simulation="stopRealtimeSimulation" /><PointVisualizationPanel
               v-else-if="activeTool === 'visualization'"
               @apply="applyPointVisualization"
               @clear="clearPointVisualization" /><CoordinatePanel
@@ -731,18 +479,19 @@ async function clearWorkspaceState() {
               :state="playbackState"
               :follow="playbackFollow"
               @load="loadTrackPlayback"
-              @select-track="playbackController.selectTrack"
-              @play="playbackController.play"
-              @pause="playbackController.pause"
-              @seek="playbackController.setTime"
-              @speed="playbackController.setSpeed"
+              @select-track="selectPlaybackTrack"
+              @play="playTrackPlayback"
+              @pause="pauseTrackPlayback"
+              @seek="seekTrackPlayback"
+              @speed="setPlaybackSpeed"
               @follow="setPlaybackFollow"
               @clear="clearTrackPlayback" /><DrawingPanel
               v-else-if="activeTool === 'drawing'"
+              :enabled="Boolean(drawingSessionLayerId)"
+              :editing="drawingEditing"
               @create="createDrawingLayer"
               @mode="setDrawMode"
-              @stop="stopDrawing"
-              @remove-selected="deleteSelectedDrawingFeatures" /><QueryPanel
+              @stop="cancelCurrentDrawing" /><QueryPanel
               v-else-if="activeTool === 'query'"
               @request-spatial="requestSpatialQuery"
               @focus="focusQueryResult" /><VectorStylePanel
@@ -760,8 +509,8 @@ async function clearWorkspaceState() {
         <footer class="map-status">
           <span>缩放 {{ currentView.zoom.toFixed(1) }}</span
           ><span
-            >{{ currentView.center[0].toFixed(5) }},
-            {{ currentView.center[1].toFixed(5) }}</span
+            >{{ (pointerCoordinate ?? currentView.center)[0].toFixed(5) }},
+            {{ (pointerCoordinate ?? currentView.center)[1].toFixed(5) }}</span
           ><span>{{ mapStore.activeBaseMap.name }}</span>
         </footer>
       </section>
@@ -769,3 +518,350 @@ async function clearWorkspaceState() {
     <WmsLayerDialog v-model="showWmsDialog" @submit="addWmsLayer" />
   </div>
 </template>
+
+<style scoped>
+.app-shell {
+  height: 100vh;
+  min-height: 620px;
+  display: flex;
+  flex-direction: column;
+  background: #05080d;
+}
+.topbar {
+  position: relative;
+  z-index: 20;
+  height: 48px;
+  flex: 0 0 48px;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 8px;
+  border-bottom-color: #3b4047;
+  background: #20252b;
+  overflow: visible;
+}
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  min-width: 0;
+  gap: 6px;
+}
+.toolbar-left {
+  flex: 0 1 auto;
+}
+.toolbar-right {
+  justify-content: flex-end;
+}
+.toolbar-right .search-panel-toolbar {
+  flex: 1 1 360px;
+}
+.brand {
+  flex: 0 0 auto;
+  gap: 6px;
+  padding-right: 7px;
+  font-size: 15px;
+}
+.brand-mark {
+  font-size: 21px;
+}
+
+/* 响应式工具栏：窄屏横向滚动 + 仅显示图标 */
+.toolbar-left .icon-only-btn .btn-text,
+.toolbar-right .icon-only-btn .btn-text {
+  display: inline;
+}
+@media (max-width: 1100px) {
+  .toolbar-left .icon-only-btn .btn-text,
+  .toolbar-right .icon-only-btn .btn-text {
+    display: none;
+  }
+  .toolbar-left .icon-only-btn,
+  .toolbar-right .icon-only-btn {
+    padding: 0 8px;
+    min-width: 36px;
+  }
+  .more-dropdown :deep(.el-button) {
+    padding: 0 10px;
+  }
+}
+@media (max-width: 800px) {
+  .topbar {
+    gap: 8px;
+    padding: 0 6px;
+  }
+  .brand span:last-child {
+    display: none;
+  }
+  .upload-button span {
+    display: none;
+  }
+  .more-label {
+    display: none;
+  }
+  :deep(.el-button--primary) .btn-text,
+  :deep(.el-button--default) .btn-text {
+    display: none;
+  }
+  :deep(.el-button--primary),
+  :deep(.el-button--default) {
+    min-width: 36px;
+    padding: 0 10px;
+  }
+  .basemap-select {
+    width: 100px;
+  }
+}
+@media (max-width: 680px) {
+  .topbar {
+    gap: 6px;
+  }
+  .toolbar-left,
+  .toolbar-right {
+    gap: 4px;
+  }
+  .toolbar-right {
+    flex: 1 1 auto;
+  }
+  .toolbar-right .search-panel-toolbar {
+    min-width: 0;
+    width: auto;
+  }
+  .basemap-select {
+    min-width: 86px;
+    width: 86px;
+  }
+}
+@media (max-width: 520px) {
+  .toolbar-right .icon-only-btn {
+    min-width: 34px;
+    padding: 0 7px;
+  }
+  .engine-switch :deep(.el-button) {
+    flex: 0 0 auto;
+     white-space: nowrap;
+     min-width: 32px !important;
+    padding: 0 7px;
+  }
+  .basemap-select {
+    min-width: 72px;
+    width: 72px;
+  }
+}
+.brand small {
+  display: none;
+}
+.upload-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 9px;
+  color: #f4fff9;
+  border: 1px solid #369a20;
+  border-radius: 3px;
+  background: #238c14;
+  font-size: 12px;
+  line-height: 26px;
+}
+.topbar :deep(.el-button) {
+  height: 28px;
+  margin: 0;
+  border-color: #4a525c;
+  border-radius: 3px;
+  color: #ecf3fb;
+  background: #30363e;
+}
+.topbar :deep(.el-button:hover) {
+  color: #fff;
+  border-color: #4e9bd0;
+  background: #3b5366;
+}
+.topbar :deep(.el-button--primary) {
+  border-color: #158bd0;
+  background: #087dbd;
+}
+.engine-switch {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.engine-switch :deep(.el-button) {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.topbar :deep(.el-button-group .el-button) {
+  min-width: 35px;
+}
+.topbar :deep(.el-select__wrapper) {
+  min-height: 28px;
+  border-radius: 3px;
+  background: #30363e;
+  box-shadow: 0 0 0 1px #4a525c inset;
+}
+.basemap-select {
+  width: 132px;
+  min-width: 100px;
+  flex-shrink: 0;
+}
+.workspace {
+  height: auto;
+  min-height: 0;
+  flex: 1;
+  display: block;
+}
+.map-stage {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  overflow: hidden;
+  background: #0a0d12;
+}
+.tool-dock {
+  position: absolute;
+  z-index: 7;
+  top: 16px;
+  left: 16px;
+  width: min(348px, calc(100% - 32px));
+  max-height: calc(100% - 64px);
+  overflow: hidden;
+  border: 1px solid #404850;
+  border-radius: 4px;
+  background: #252b31;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+}
+.dock-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 35px;
+  padding: 0 10px;
+  border-bottom: 1px solid #454d56;
+  color: #f2f6fa;
+  background: #20252b;
+  font-size: 13px;
+  font-weight: 700;
+}
+.dock-header span::before {
+  margin-right: 7px;
+  color: #75b8e7;
+  content: "▦";
+}
+.dock-header button {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  color: #99a5b0;
+  background: transparent;
+  font-size: 18px;
+  cursor: pointer;
+}
+.dock-header button:hover {
+  color: #fff;
+}
+.dock-content {
+  max-height: calc(100vh - 148px);
+  overflow: auto;
+}
+.tool-dock .panel {
+  min-height: 0;
+  margin: 0;
+  padding: 14px;
+  border: 0;
+  border-radius: 0;
+  background: #292f35;
+}
+.tool-dock .layer-workspace-panel {
+  padding: 0;
+}
+.tool-dock .panel-title {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #3d454e;
+}
+.tool-dock .empty-state {
+  min-height: 150px;
+}
+.search-panel-toolbar {
+  position: relative;
+  width: min(360px, 29vw);
+  min-width: 180px;
+  flex-shrink: 1;
+}
+.search-panel-toolbar :deep(.el-input) {
+  margin: 0;
+}
+.search-panel-toolbar :deep(.el-input__wrapper) {
+  border-radius: 3px;
+  background: #30363e;
+  box-shadow: 0 0 0 1px #4a525c inset;
+}
+.search-panel-toolbar .search-results,
+.search-panel-toolbar .search-state {
+  position: absolute;
+  z-index: 10;
+  top: 34px;
+  right: 0;
+  width: min(360px, 46vw);
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #46515c;
+  border-radius: 3px;
+  background: #242a30;
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.42);
+}
+.search-panel-toolbar .search-results {
+  max-height: 320px;
+  overflow: auto;
+  padding-top: 0;
+}
+.search-panel-toolbar .search-state {
+  color: #b7c2cc;
+  font-size: 11px;
+}
+.map-status {
+  position: absolute;
+  z-index: 4;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  height: 26px;
+  padding: 0 10px;
+  border-top: 1px solid #343b43;
+  color: #c1cbd4;
+  background: rgba(31, 36, 42, 0.94);
+  font-family: Consolas, monospace;
+  font-size: 10px;
+  pointer-events: none;
+}
+.map-status span:last-child {
+  margin-left: auto;
+  color: #83bde5;
+  font-family: inherit;
+}
+.map-stage .map-hint {
+  bottom: 38px;
+  left: auto;
+  right: 16px;
+  border-color: #3f4a54;
+  border-radius: 3px;
+  background: rgba(31, 36, 42, 0.88);
+  font-size: 11px;
+}
+.measurement-badge {
+  top: auto;
+  bottom: 40px;
+  left: 16px;
+  border-radius: 3px;
+}
+.ol-zoom {
+  top: 16px;
+  right: 16px;
+}
+.ol-control button {
+  border-radius: 2px;
+  background: rgba(37, 43, 49, 0.92);
+}
+</style>

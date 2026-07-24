@@ -17,7 +17,11 @@
         "district": "金水区",
         "status": "已启用",
         "priority": 5,
-        "capacity": 1200
+        "capacity": 1200,
+        "trackId": "vehicle-001",
+        "timestamp": "2026-07-24T08:00:00+08:00",
+        "sequence": 1,
+        "speed": 36
       },
       "geometry": {
         "type": "Point",
@@ -36,7 +40,11 @@
         "district": "中原区",
         "status": "已启用",
         "priority": 4,
-        "capacity": 680
+        "capacity": 680,
+        "trackId": "vehicle-001",
+        "timestamp": "2026-07-24T08:00:30+08:00",
+        "sequence": 2,
+        "speed": 42
       },
       "geometry": {
         "type": "Point",
@@ -55,7 +63,11 @@
         "district": "金水区",
         "status": "已启用",
         "priority": 3,
-        "capacity": 2100
+        "capacity": 2100,
+        "trackId": "vehicle-002",
+        "timestamp": "2026-07-24T08:00:05+08:00",
+        "sequence": 1,
+        "speed": 36
       },
       "geometry": {
         "type": "Point",
@@ -74,7 +86,11 @@
         "district": "中原区",
         "status": "规划中",
         "priority": 2,
-        "capacity": 1500
+        "capacity": 1500,
+        "trackId": "vehicle-002",
+        "timestamp": "2026-07-24T08:00:30+08:00",
+        "sequence": 2,
+        "speed": 42
       },
       "geometry": {
         "type": "Point",
@@ -93,7 +109,11 @@
         "district": "金水区",
         "status": "已启用",
         "priority": 2,
-        "capacity": 8000
+        "capacity": 8000,
+        "trackId": "vehicle-003",
+        "timestamp": "2026-07-24T08:00:10+08:00",
+        "sequence": 1,
+        "speed": 36
       },
       "geometry": {
         "type": "Point",
@@ -112,7 +132,11 @@
         "district": "郑东新区",
         "status": "已启用",
         "priority": 4,
-        "capacity": 12000
+        "capacity": 12000,
+        "trackId": "vehicle-003",
+        "timestamp": "2026-07-24T08:00:30+08:00",
+        "sequence": 2,
+        "speed": 42
       },
       "geometry": {
         "type": "Point",
@@ -131,7 +155,11 @@
         "district": "二七区",
         "status": "已启用",
         "priority": 5,
-        "capacity": 35000
+        "capacity": 35000,
+        "trackId": "vehicle-004",
+        "timestamp": "2026-07-24T08:00:15+08:00",
+        "sequence": 1,
+        "speed": 36
       },
       "geometry": {
         "type": "Point",
@@ -150,7 +178,11 @@
         "district": "郑东新区",
         "status": "已启用",
         "priority": 4,
-        "capacity": 22000
+        "capacity": 22000,
+        "trackId": "vehicle-004",
+        "timestamp": "2026-07-24T08:00:30+08:00",
+        "sequence": 2,
+        "speed": 42
       },
       "geometry": {
         "type": "Point",
@@ -169,7 +201,11 @@
         "district": "中原区",
         "status": "已启用",
         "priority": 1,
-        "capacity": 5000
+        "capacity": 5000,
+        "trackId": "vehicle-005",
+        "timestamp": "2026-07-24T08:00:20+08:00",
+        "sequence": 1,
+        "speed": 36
       },
       "geometry": {
         "type": "Point",
@@ -188,7 +224,11 @@
         "district": "管城区",
         "status": "规划中",
         "priority": 3,
-        "capacity": 9000
+        "capacity": 9000,
+        "trackId": "vehicle-005",
+        "timestamp": "2026-07-24T08:00:30+08:00",
+        "sequence": 2,
+        "speed": 42
       },
       "geometry": {
         "type": "Point",

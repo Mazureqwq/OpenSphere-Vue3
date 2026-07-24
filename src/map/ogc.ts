@@ -1,4 +1,4 @@
-﻿import TileLayer from 'ol/layer/Tile';
+import TileLayer from 'ol/layer/Tile';
 import TileWMS from 'ol/source/TileWMS';
 import type {LayerRecord} from '@/types/gis';
 

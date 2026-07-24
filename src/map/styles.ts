@@ -1,4 +1,4 @@
-﻿import CircleStyle from 'ol/style/Circle';
+import CircleStyle from 'ol/style/Circle';
 import Fill from 'ol/style/Fill';
 import Stroke from 'ol/style/Stroke';
 import Style, {type StyleFunction} from 'ol/style/Style';

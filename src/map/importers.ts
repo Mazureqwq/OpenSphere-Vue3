@@ -1,4 +1,4 @@
-﻿import Feature from 'ol/Feature';
+import Feature from 'ol/Feature';
 import GeoJSON from 'ol/format/GeoJSON';
 import GPX from 'ol/format/GPX';
 import KML from 'ol/format/KML';

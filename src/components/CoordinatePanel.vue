@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref} from 'vue';
 import {ElMessage} from 'element-plus';
 import {convertCoordinate, type CoordinateSystem, type GeographicCoordinate} from '@/map/coordinateTransform';
@@ -44,3 +44,57 @@ function swap() { const previous = source.value; source.value = target.value; ta
     <p class="coordinate-note">输入顺序为经度、纬度。中国境外坐标进行 WGS84 / GCJ-02 转换时保持原值，避免无意义偏移。</p>
   </section>
 </template>
+
+
+
+<style scoped>
+.coordinate-inputs,
+.coordinate-systems {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 12px;
+}
+.coordinate-systems {
+  grid-template-columns: minmax(0, 1fr) 16px minmax(0, 1fr);
+  align-items: center;
+  margin-top: 8px;
+}
+.coordinate-systems > span {
+  color: #6f8ba6;
+  text-align: center;
+}
+.coordinate-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 10px;
+}
+.coordinate-actions :deep(.el-button) {
+  margin: 0;
+}
+.coordinate-result {
+  display: grid;
+  gap: 4px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #1e3853;
+  color: #7893ae;
+  font-size: 10px;
+}
+.coordinate-result strong {
+  overflow: hidden;
+  color: #d9e8f7;
+  font-family: Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.coordinate-note {
+  margin: 9px 0 0;
+  color: #7189a3;
+  font-size: 10px;
+  line-height: 1.55;
+}
+</style>

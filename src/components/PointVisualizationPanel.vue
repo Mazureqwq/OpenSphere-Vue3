@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, reactive, ref, watch} from 'vue';
 import {useMapStore} from '@/stores/map';
 import type {PointVisualizationConfig, PointVisualizationMode} from '@/types/gis';
@@ -35,3 +35,40 @@ function setMode(mode: PointVisualizationMode) { config.mode = mode; }
     </template>
   </section>
 </template>
+
+
+
+<style scoped>
+.point-visualization-panel :deep(.el-select) {
+  width: 100%;
+  margin-top: 12px;
+}
+.visualization-modes,
+.visualization-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin-top: 10px;
+}
+.visualization-modes :deep(.el-button),
+.visualization-actions :deep(.el-button) {
+  margin: 0;
+}
+.visualization-controls {
+  margin-top: 12px;
+}
+.visualization-controls label {
+  display: grid;
+  grid-template-columns: 68px 1fr;
+  gap: 8px;
+  align-items: center;
+  color: #7893ae;
+  font-size: 11px;
+}
+.visualization-controls p {
+  margin: 9px 0 0;
+  color: #7189a3;
+  font-size: 10px;
+  line-height: 1.5;
+}
+</style>

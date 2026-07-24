@@ -265,7 +265,22 @@ export class CesiumManager {
     this.viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(coordinate[0], coordinate[1], 1800), duration: 0.45});
   }
 
+  focusCoordinate(coordinate: [number, number]) {
+    if (this.locationEntity) {
+      this.viewer.entities.remove(this.locationEntity);
+      this.locationEntity = undefined;
+    }
+    this.viewer.camera.flyTo({destination: Cesium.Cartesian3.fromDegrees(coordinate[0], coordinate[1], 1800), duration: 0.45});
+  }
+
   resize() { this.viewer.resize(); this.updateCameraZoomLimits(); }
+  getCoordinateFromScreen(pixel: [number, number]) {
+    const cartesian = this.viewer.camera.pickEllipsoid(new Cesium.Cartesian2(pixel[0], pixel[1]), this.viewer.scene.globe.ellipsoid);
+    if (!cartesian) return undefined;
+    const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+    return [Number(Cesium.Math.toDegrees(cartographic.longitude).toFixed(6)), Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(6))] as [number, number];
+  }
+
   getScreenPosition(coordinate: [number, number]) {
     const position = Cesium.SceneTransforms.worldToWindowCoordinates(this.viewer.scene, Cesium.Cartesian3.fromDegrees(coordinate[0], coordinate[1]));
     return position ? [position.x, position.y] : undefined;

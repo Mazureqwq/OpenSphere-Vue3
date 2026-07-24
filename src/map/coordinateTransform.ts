@@ -1,4 +1,4 @@
-﻿export type CoordinateSystem = 'WGS84' | 'GCJ02' | 'BD09';
+export type CoordinateSystem = 'WGS84' | 'GCJ02' | 'BD09';
 export type GeographicCoordinate = [longitude: number, latitude: number];
 
 const a = 6378245;

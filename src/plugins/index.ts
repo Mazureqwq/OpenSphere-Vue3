@@ -1,4 +1,4 @@
-﻿export interface OpenSpherePlugin { readonly id: string; readonly name: string; install(): void; }
+export interface OpenSpherePlugin { readonly id: string; readonly name: string; install(): void; }
 const installedPlugins: OpenSpherePlugin[] = [];
 export function registerPlugin(plugin: OpenSpherePlugin) { if (!installedPlugins.some((item) => item.id === plugin.id)) { plugin.install(); installedPlugins.push(plugin); } }
 export function getInstalledPlugins() { return [...installedPlugins]; }

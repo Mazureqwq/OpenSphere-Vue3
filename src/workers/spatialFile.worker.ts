@@ -1,4 +1,4 @@
-﻿import JSZip from 'jszip';
+import JSZip from 'jszip';
 import shp from 'shpjs';
 
 type WorkerRequest = {kind: 'shapefile' | 'kmz'; buffer: ArrayBuffer};

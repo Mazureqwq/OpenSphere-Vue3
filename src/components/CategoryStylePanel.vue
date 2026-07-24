@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, toRaw, watch} from 'vue';
 import type BaseLayer from 'ol/layer/Base';
 import {ElMessage} from 'element-plus';

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, reactive, watch} from 'vue';
 import {useMapStore} from '@/stores/map';
 import type {VectorStyleConfig} from '@/types/gis';

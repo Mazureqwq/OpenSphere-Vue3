@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {computed, ref, toRaw, watch} from 'vue';
 import type BaseLayer from 'ol/layer/Base';
 import {ElMessage} from 'element-plus';
@@ -54,3 +54,67 @@ function clearSpatial() { if (mapStore.query) mapStore.setQuery({...mapStore.que
     </template>
   </section>
 </template>
+
+
+
+<style scoped>
+.query-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 13px;
+}
+.query-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 9px;
+}
+.query-actions :deep(.el-button) {
+  margin: 0;
+}
+.query-results {
+  max-height: 200px;
+  margin-top: 12px;
+  overflow: auto;
+  border-top: 1px solid #1e3853;
+}
+.query-result-title {
+  padding: 8px 0;
+  color: #7dd3fc;
+  font-size: 11px;
+}
+.query-result {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  border: 0;
+  border-top: 1px solid #1a3049;
+  color: #d7e5f3;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.query-result:hover {
+  color: #5eead4;
+}
+.query-result strong,
+.query-result span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.query-result strong {
+  flex: 1;
+}
+.query-result span {
+  max-width: 90px;
+  color: #6986a2;
+  font-family: Consolas, monospace;
+  font-size: 9px;
+}
+</style>

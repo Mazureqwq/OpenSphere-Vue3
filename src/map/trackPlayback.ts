@@ -1,4 +1,4 @@
-﻿import Feature from 'ol/Feature';
+import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import type {Coordinate} from 'ol/coordinate';
 import type {LayerRecord} from '@/types/gis';

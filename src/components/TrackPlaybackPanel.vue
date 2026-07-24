@@ -33,10 +33,22 @@ watch([layers, () => mapStore.selectedLayerId], () => {
   if (selected) sourceLayerId.value = selected.id;
   else if (!layers.value.some((layer) => layer.id === sourceLayerId.value)) sourceLayerId.value = layers.value[0]?.id ?? '';
 }, {immediate: true});
+function preferredIdField() {
+  return fields.value.find((field) => /track.?id|trajectory|轨迹/i.test(field))
+    ?? fields.value.find((field) => !timeFields.value.includes(field))
+    ?? '';
+}
+function preferredTimeField(layer: typeof selectedLayer.value) {
+  return timeFields.value.find((field) => /time|date|timestamp|时间|日期/i.test(field))
+    ?? layer?.timeFilter?.field
+    ?? timeFields.value[0]
+    ?? '';
+}
+
 watch(selectedLayer, (layer) => {
   if (!layer) return;
-  if (!fields.value.includes(idField.value)) idField.value = fields.value.find((field) => !timeFields.value.includes(field)) ?? '';
-  if (!timeFields.value.includes(timeField.value)) timeField.value = layer.timeFilter?.field ?? timeFields.value[0] ?? '';
+  if (!fields.value.includes(idField.value)) idField.value = preferredIdField();
+  if (!timeFields.value.includes(timeField.value)) timeField.value = preferredTimeField(layer);
 }, {immediate: true});
 
 function load() {
@@ -63,3 +75,55 @@ function formatTime(value?: number) { return value === undefined ? '—' : new D
     </template>
   </section>
 </template>
+
+
+
+<style scoped>
+.track-playback-panel :deep(.el-select) {
+  width: 100%;
+}
+.playback-config {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.playback-load {
+  width: 100%;
+  margin-top: 9px;
+}
+.playback-track-select {
+  margin-top: 12px;
+}
+.playback-actions {
+  display: grid;
+  grid-template-columns: 1fr 72px 76px;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+}
+.playback-actions :deep(.el-button) {
+  margin: 0;
+}
+.playback-actions :deep(.el-switch) {
+  justify-self: end;
+}
+.playback-time {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 5px;
+  color: #90a9c1;
+  font-family: Consolas, monospace;
+  font-size: 10px;
+}
+.playback-time small {
+  color: #617d99;
+  font-size: 10px;
+}
+.playback-note {
+  margin: 10px 0 0;
+  color: #7189a3;
+  font-size: 10px;
+  line-height: 1.55;
+}
+</style>

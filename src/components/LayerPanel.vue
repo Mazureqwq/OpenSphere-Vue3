@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {useMapStore} from '@/stores/map';
 const mapStore = useMapStore();
 const emit = defineEmits<{remove: [id: string]}>();

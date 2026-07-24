@@ -1,4 +1,4 @@
-﻿import GeoJSON from 'ol/format/GeoJSON';
+import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import type BaseLayer from 'ol/layer/Base';

@@ -1,4 +1,4 @@
-﻿import Feature from 'ol/Feature';
+import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import Heatmap from 'ol/layer/Heatmap';
 import VectorLayer from 'ol/layer/Vector';

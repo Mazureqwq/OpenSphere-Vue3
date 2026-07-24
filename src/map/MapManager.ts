@@ -76,6 +76,13 @@ export class MapManager {
     return pixel ? [pixel[0], pixel[1]] : undefined;
   }
 
+  getCoordinateFromPixel(pixel: number[]) {
+    const coordinate = this.map.getCoordinateFromPixel(pixel);
+    if (!coordinate) return undefined;
+    const lonLat = toLonLat(coordinate);
+    return [Number(lonLat[0].toFixed(6)), Number(lonLat[1].toFixed(6))] as [number, number];
+  }
+
   private createBaseLayer(baseMap: BaseMapOption) {
     const zoomRange = isTianDiTuBaseMap(baseMap) ? {minZoom: TDT_MIN_ZOOM, maxZoom: TDT_MAX_ZOOM} : {};
     return new Group({properties: {id: 'base-map'}, layers: baseMap.layers.map((item) => new TileLayer({properties: {id: item.id}, source: new XYZ({url: item.url, attributions: item.attribution, crossOrigin: 'anonymous', ...zoomRange})}))});
@@ -121,7 +128,7 @@ export class MapManager {
     const geometry = feature.getGeometry();
     const properties = Object.entries(feature.getProperties()).filter(([key]) => key !== 'geometry').reduce<Record<string, string>>((result, [key, value]) => ({...result, [key]: this.serializeValue(value)}), {});
     const center = geometry ? toLonLat(getCenter(geometry.getExtent())) : undefined;
-    return {layerId: layerId ?? '', layerName: layerName ?? '未命名图层', geometryType: geometry?.getType() ?? '未知几何', coordinate: center ? [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))] : undefined, properties};
+    return {featureId: feature.getId() == null ? undefined : String(feature.getId()), layerId: layerId ?? '', layerName: layerName ?? '未命名图层', geometryType: geometry?.getType() ?? '未知几何', coordinate: center ? [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))] : undefined, properties};
   }
 
   private serializeValue(value: unknown) {
@@ -178,7 +185,7 @@ export class MapManager {
 
   setDrawMode(mode?: DrawMode, record?: LayerRecord) {
     this.clearDrawingInteractions();
-    if (!mode || !record?.drawing) return;
+    if (!mode || !record || record.kind !== 'vector') return;
     const source = this.getVectorSource(record);
     if (!source) return;
 
@@ -190,6 +197,8 @@ export class MapManager {
       this.modify.on('modifyend', () => this.onDrawingChange());
       return;
     }
+
+    if (!record.drawing) return;
 
     this.select.setActive(false);
     this.draw = new Draw({source, type: mode, stopClick: true});
@@ -210,8 +219,19 @@ export class MapManager {
     });
   }
 
+  deleteFeature(record: LayerRecord, featureId?: string) {
+    const source = this.getVectorSource(record);
+    if (!source) return 0;
+    const feature = featureId ? source.getFeatureById(featureId) : undefined;
+    if (!feature) return this.deleteSelectedDrawingFeatures(record);
+    source.removeFeature(feature);
+    this.select.getFeatures().clear();
+    this.onDrawingChange();
+    return 1;
+  }
+
   deleteSelectedDrawingFeatures(record?: LayerRecord) {
-    if (!record?.drawing) return 0;
+    if (!record || record.kind !== 'vector') return 0;
     const source = this.getVectorSource(record);
     if (!source) return 0;
     const selected = [...this.select.getFeatures().getArray()];
@@ -300,6 +320,11 @@ export class MapManager {
     this.map.addLayer(layer);
     const view = this.map.getView();
     view.animate({center: fromLonLat(coordinate), zoom: Math.max(view.getZoom() ?? 5, 14), duration: 450});
+  }
+
+  focusCoordinate(coordinate: [number, number]) {
+    const view = this.map.getView();
+    view.animate({center: fromLonLat(coordinate), zoom: 16, duration: 450});
   }
 
   clearCoordinateLocation() {

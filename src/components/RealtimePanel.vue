@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import {ref} from 'vue';
 import {ElMessage} from 'element-plus';
 import type {RealtimeStatus} from '@/map/realtime';
@@ -31,3 +31,71 @@ function formatTime(value?: string) { return value ? new Date(value).toLocaleTim
     <p class="realtime-note">接收单条对象、数组或 <code>{ data: ... }</code>，坐标字段兼容 <code>lon/lat</code>、<code>lng/lat</code>、<code>longitude/latitude</code>。</p>
   </section>
 </template>
+
+
+
+<style scoped>
+.realtime-panel :deep(.el-input) {
+  margin-top: 12px;
+}
+.realtime-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 10px;
+}
+.realtime-actions :deep(.el-button) {
+  margin: 0;
+}
+.status-badge {
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #243a53;
+  color: #a8bed2;
+  font-size: 10px;
+  font-weight: 500;
+}
+.status-badge.connected,
+.status-badge.simulation {
+  background: #123f3d;
+  color: #5eead4;
+}
+.status-badge.connecting,
+.status-badge.reconnecting {
+  background: #3d3212;
+  color: #fbbf24;
+}
+.status-badge.error {
+  background: #4a2028;
+  color: #fda4af;
+}
+.realtime-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #1e3853;
+  color: #7893ae;
+  font-size: 11px;
+}
+.realtime-meta strong {
+  color: #d6e6f5;
+  font-family: Consolas, monospace;
+  font-weight: 500;
+}
+.realtime-note,
+.realtime-error {
+  margin: 10px 0 0;
+  font-size: 10px;
+  line-height: 1.55;
+}
+.realtime-note {
+  color: #7189a3;
+}
+.realtime-note code {
+  color: #a5d8ff;
+}
+.realtime-error {
+  color: #fda4af;
+}
+</style>
