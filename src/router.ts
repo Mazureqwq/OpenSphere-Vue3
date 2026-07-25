@@ -1,7 +1,7 @@
-import {createRouter, createWebHashHistory} from 'vue-router';
-import AppView from './views/AppView.vue';
+import { createRouter, createWebHistory } from "vue-router";
+import AppView from "./views/AppView.vue";
 
 export default createRouter({
-  history: createWebHashHistory(),
-  routes: [{path: '/', component: AppView}],
+  history: createWebHistory(),
+  routes: [{ path: "/", component: AppView }],
 });
