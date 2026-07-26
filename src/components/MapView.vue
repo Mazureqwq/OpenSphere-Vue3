@@ -9,8 +9,9 @@ import type {MapViewState} from '@/types/workspace';
 import type {PlaybackPosition, PlaybackTrack} from '@/map/trackPlayback';
 import {useMapStore} from '@/stores/map';
 import {toPopupPosition} from '@/core/mapInteraction.js';
+import type { MapFacade } from '@/map/facade';
 
-const emit = defineEmits<{viewChange: [state: MapViewState]; pointerChange: [coordinate?: [number, number]]; measurementChange: [value?: string]; drawingChange: []}>();
+const emit = defineEmits<{ready: [facade: MapFacade]; viewChange: [state: MapViewState]; pointerChange: [coordinate?: [number, number]]; measurementChange: [value?: string]; drawingChange: []}>();
 const mapStore = useMapStore();
 const target2d = ref<HTMLElement>();
 const target3d = ref<HTMLElement>();
@@ -34,6 +35,7 @@ onMounted(() => {
   target3d.value?.addEventListener('mouseleave', () => emit('pointerChange'));
   target3d.value?.addEventListener('mousemove', handleCesiumPointerMove);
   void switchEngine(mapStore.mapEngine);
+  emit('ready', facade);
 });
 onBeforeUnmount(() => { stopCesiumPopupTracking?.(); cesiumManager?.destroy(); manager?.dispose(); });
 
@@ -147,7 +149,27 @@ function clearTrackPlayback() { playbackOverlay = undefined; manager?.clearTrack
 function locateCoordinate(coordinate: [number, number]) { manager?.locateCoordinate(coordinate); if (mapStore.mapEngine === '3d') cesiumManager?.locateCoordinate(coordinate); }
 function focusCoordinate(coordinate: [number, number]) { manager?.focusCoordinate(coordinate); if (mapStore.mapEngine === '3d') cesiumManager?.focusCoordinate(coordinate); }
 function clearCoordinateLocation() { manager?.clearCoordinateLocation(); }
-defineExpose({addLayer, removeLayer, clearLayers, setBaseMap, getViewState, setViewState, setDrawMode, deleteSelectedDrawingFeatures, startSpatialQuery, focusFeature, setPointVisualization, clearPointVisualization, syncRealtimeLayer, setTrackPlayback, clearTrackPlayback, locateCoordinate, focusCoordinate, clearCoordinateLocation});
+const facade: MapFacade = {
+  addLayer,
+  removeLayer,
+  clearLayers,
+  setBaseMap,
+  getViewState,
+  setViewState,
+  setDrawMode,
+  deleteSelectedDrawingFeatures,
+  startSpatialQuery,
+  focusFeature,
+  setPointVisualization,
+  clearPointVisualization,
+  syncRealtimeLayer,
+  setTrackPlayback,
+  clearTrackPlayback,
+  locateCoordinate,
+  focusCoordinate,
+  clearCoordinateLocation,
+};
+defineExpose(facade);
 </script>
 
 <template>

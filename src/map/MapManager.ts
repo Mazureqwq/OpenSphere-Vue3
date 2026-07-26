@@ -89,11 +89,12 @@ export class MapManager {
   }
 
   private handleFeatureClick(pixel: number[]) {
+    const clickCoordinate = this.getCoordinateFromPixel(pixel);
     let clusterSelection: SelectedFeatureInfo | undefined;
     let expandedCluster = false;
     this.map.forEachFeatureAtPixel(pixel, (feature, layer) => {
       if (!layer || layer.get('visualizationMode') !== 'cluster') return undefined;
-      clusterSelection = this.expandCluster(feature as Feature<Geometry>);
+      clusterSelection = this.expandCluster(feature as Feature<Geometry>, clickCoordinate);
       expandedCluster = true;
       return feature;
     }, {hitTolerance: 6});
@@ -102,17 +103,17 @@ export class MapManager {
     let selected: SelectedFeatureInfo | undefined;
     this.map.forEachFeatureAtPixel(pixel, (feature, layer) => {
       if (!layer || layer.get('sourceType') === 'wms' || layer.get('sourceType') === 'playback' || layer.get('sourceType') === 'coordinate-location' || layer.get('visualizationMode')) return undefined;
-      selected = this.serializeFeature(feature as Feature<Geometry>, layer.get('id'), layer.get('displayName'));
+      selected = this.serializeFeature(feature as Feature<Geometry>, layer.get('id'), layer.get('displayName'), clickCoordinate);
       return feature;
     }, {hitTolerance: 6});
     this.onFeatureSelected(selected, selected ? pixel : undefined);
   }
 
-  private expandCluster(feature: Feature<Geometry>) {
+  private expandCluster(feature: Feature<Geometry>, clickCoordinate?: [number, number]) {
     const children = getClusterPointFeatures(feature);
     if (children.length === 1) {
       const item = children[0] as Feature<Geometry>;
-      return this.serializeFeature(item, this.visualizedRecord?.id, this.visualizedRecord?.name);
+      return this.serializeFeature(item, this.visualizedRecord?.id, this.visualizedRecord?.name, clickCoordinate);
     }
     if (children.length < 2) return undefined;
     const extent = createEmpty();
@@ -124,11 +125,40 @@ export class MapManager {
     return undefined;
   }
 
-  private serializeFeature(feature: Feature<Geometry>, layerId?: string, layerName?: string): SelectedFeatureInfo {
+  private serializeFeature(feature: Feature<Geometry>, layerId?: string, layerName?: string, clickCoordinate?: [number, number]): SelectedFeatureInfo {
     const geometry = feature.getGeometry();
     const properties = Object.entries(feature.getProperties()).filter(([key]) => key !== 'geometry').reduce<Record<string, string>>((result, [key, value]) => ({...result, [key]: this.serializeValue(value)}), {});
+    if (geometry && geometry.getType() === 'Point') {
+      const point = toLonLat((geometry as import('ol/geom/Point').default).getCoordinates());
+      return {
+        featureId: feature.getId() == null ? undefined : String(feature.getId()),
+        layerId: layerId ?? '',
+        layerName: layerName ?? '?????',
+        geometryType: 'Point',
+        coordinate: [Number(point[0].toFixed(6)), Number(point[1].toFixed(6))],
+        properties,
+      };
+    }
+    // Prefer click position for line/polygon so popup anchors where the user clicked.
+    if (clickCoordinate) {
+      return {
+        featureId: feature.getId() == null ? undefined : String(feature.getId()),
+        layerId: layerId ?? '',
+        layerName: layerName ?? '?????',
+        geometryType: geometry?.getType() ?? '????',
+        coordinate: [Number(clickCoordinate[0].toFixed(6)), Number(clickCoordinate[1].toFixed(6))],
+        properties,
+      };
+    }
     const center = geometry ? toLonLat(getCenter(geometry.getExtent())) : undefined;
-    return {featureId: feature.getId() == null ? undefined : String(feature.getId()), layerId: layerId ?? '', layerName: layerName ?? '未命名图层', geometryType: geometry?.getType() ?? '未知几何', coordinate: center ? [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))] : undefined, properties};
+    return {
+      featureId: feature.getId() == null ? undefined : String(feature.getId()),
+      layerId: layerId ?? '',
+      layerName: layerName ?? '?????',
+      geometryType: geometry?.getType() ?? '????',
+      coordinate: center ? [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))] : undefined,
+      properties,
+    };
   }
 
   private serializeValue(value: unknown) {
