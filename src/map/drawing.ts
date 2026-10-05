@@ -3,7 +3,7 @@ import VectorSource from 'ol/source/Vector';
 import {createVectorStyle, defaultVectorStyle} from '@/map/styles';
 import type {LayerRecord} from '@/types/gis';
 
-export type DrawMode = 'Point' | 'LineString' | 'Polygon' | 'modify';
+export type DrawMode = 'Point' | 'LineString' | 'Polygon' | 'modify' | 'measureLine' | 'measureArea';
 
 export function createVectorLayer(name: string, drawing = false): LayerRecord {
   const id = `vector-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;

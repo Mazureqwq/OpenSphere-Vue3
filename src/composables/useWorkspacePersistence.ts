@@ -35,7 +35,7 @@ export function useWorkspacePersistence(options: WorkspacePersistenceOptions) {
     timeRange: options.mapStore.timeRange,
     query: options.mapStore.query,
     layers: options.mapStore.layers
-      .filter((layer) => !layer.realtime)
+      .filter((layer) => !layer.realtime && !layer.demo)
       .map((layer) => ({
         id: layer.id,
         visible: layer.visible,

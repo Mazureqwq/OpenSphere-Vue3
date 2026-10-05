@@ -18,7 +18,7 @@ const properties = computed(() => Object.entries(mapStore.selectedFeature?.prope
       </div>
       <div v-if="mapStore.selectedFeature.coordinate" class="feature-coordinate">{{ mapStore.selectedFeature.coordinate[0] }}, {{ mapStore.selectedFeature.coordinate[1] }}</div>
       <div v-if="properties.length" class="property-list">
-        <div v-for="[key, value] in properties" :key="key" class="property-row"><span>{{ key }}</span><strong>{{ value || '—' }}</strong></div>
+        <div v-for="[key, value] in properties" :key="key" class="property-row"><span>{{ formatFieldLabel(key) }}</span><strong>{{ formatDisplayValue(value) }}</strong></div>
       </div>
       <div v-else class="empty-state feature-empty">该要素未包含自定义属性</div>
     </template>

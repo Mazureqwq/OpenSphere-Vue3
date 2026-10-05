@@ -8,11 +8,10 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "test": "node --test tests/coreLogic.test.mjs",
+    "test": "node --test \"tests/*.test.mjs\"",
     "deploy:pro": "pnpm build && ssh root@47.109.193.165 \"rm -rf /var/www/opensphere-vue3/*\" && scp -r dist/* root@47.109.193.165:/var/www/opensphere-vue3/ && ssh root@47.109.193.165 \"/usr/local/openresty/nginx/sbin/nginx -s reload\""
   },
   "dependencies": {
-    "@types/shpjs": "^3.4.7",
     "cesium": "^1.143.0",
     "element-plus": "^2.9.8",
     "jszip": "^3.10.1",
@@ -20,15 +19,16 @@
     "papaparse": "^5.5.3",
     "pinia": "^3.0.1",
     "shpjs": "^6.2.0",
-    "vite-plugin-static-copy": "^3.4.0",
     "vue": "^3.5.13",
     "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@types/papaparse": "^5.3.15",
+    "@types/shpjs": "^3.4.7",
     "@vitejs/plugin-vue": "^5.2.3",
     "typescript": "~5.7.3",
     "vite": "^6.1.0",
+    "vite-plugin-static-copy": "^3.4.0",
     "vue-tsc": "^2.2.0"
   }
 }

@@ -7,6 +7,8 @@ import Draw from 'ol/interaction/Draw';
 import Modify from 'ol/interaction/Modify';
 import Select from 'ol/interaction/Select';
 import Snap from 'ol/interaction/Snap';
+import Overlay from 'ol/Overlay';
+import Collection from 'ol/Collection';
 import XYZ from 'ol/source/XYZ';
 import {click, shiftKeyOnly} from 'ol/events/condition';
 import {createEmpty, extend, getCenter} from 'ol/extent';
@@ -23,6 +25,7 @@ import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import {Circle as CircleStyle, Fill, Stroke, Style, Text} from 'ol/style';
 import type Geometry from 'ol/geom/Geometry';
+import type Polygon from 'ol/geom/Polygon';
 import type {BaseMapOption, LayerRecord, PointVisualizationConfig, SelectedFeatureInfo} from '@/types/gis';
 import {createPointVisualization, getClusterPointFeatures, getPointFeatures} from '@/map/pointVisualization';
 import type {PlaybackPosition, PlaybackTrack} from '@/map/trackPlayback';
@@ -49,6 +52,7 @@ export class MapManager {
   private readonly select: Select;
   private draw?: Draw;
   private modify?: Modify;
+  private readonly modifyCollection = new Collection<Feature>();
   private snap?: Snap;
   private geometryListener?: EventsKey;
   private spatialQueryBox?: DragBox;
@@ -59,6 +63,10 @@ export class MapManager {
   private playbackLine?: Feature<LineString>;
   private playbackSourceLayerId?: string;
   private coordinateLocationLayer?: VectorLayer<VectorSource>;
+  private measureSource?: VectorSource;
+  private measureOverlay?: Overlay;
+  private measureElement?: HTMLElement;
+  private measurePointerKey?: EventsKey;
 
   constructor(target: HTMLElement, baseMap: BaseMapOption, onFeatureSelected: (feature?: SelectedFeatureInfo, pixel?: number[]) => void, onMeasurementChange: (value?: string) => void, onDrawingChange: () => void) {
     this.baseLayer = this.createBaseLayer(baseMap);
@@ -66,8 +74,15 @@ export class MapManager {
     this.onMeasurementChange = onMeasurementChange;
     this.onDrawingChange = onDrawingChange;
     this.map = new Map({target, layers: [this.baseLayer], controls: defaultControls({zoom: false, rotate: false}), view: new View({center: fromLonLat([113.6254, 34.7466]), zoom: 5, ...getBaseMapZoomRange(baseMap)})});
+    this.modify = new Modify({features: this.modifyCollection});
+    this.map.addInteraction(this.modify);
+    this.modify.on('modifyend', () => this.onDrawingChange());
     this.select = new Select({condition: click, hitTolerance: 6, layers: (layer) => layer.get('sourceType') !== 'wms' && layer.get('sourceType') !== 'playback' && layer.get('sourceType') !== 'coordinate-location' && layer.get('id') !== 'base-map' && !layer.get('visualizationMode')});
     this.map.addInteraction(this.select);
+    this.select.on('select', (event) => {
+      this.modifyCollection.clear();
+      event.selected.forEach((feature) => this.modifyCollection.push(feature));
+    });
     this.map.on('singleclick', (event) => this.handleFeatureClick(event.pixel));
   }
 
@@ -128,6 +143,7 @@ export class MapManager {
   private serializeFeature(feature: Feature<Geometry>, layerId?: string, layerName?: string, clickCoordinate?: [number, number]): SelectedFeatureInfo {
     const geometry = feature.getGeometry();
     const properties = Object.entries(feature.getProperties()).filter(([key]) => key !== 'geometry').reduce<Record<string, string>>((result, [key, value]) => ({...result, [key]: this.serializeValue(value)}), {});
+    const metrics = this.computeMetrics(geometry);
     if (geometry && geometry.getType() === 'Point') {
       const point = toLonLat((geometry as import('ol/geom/Point').default).getCoordinates());
       return {
@@ -137,6 +153,7 @@ export class MapManager {
         geometryType: 'Point',
         coordinate: [Number(point[0].toFixed(6)), Number(point[1].toFixed(6))],
         properties,
+        metrics,
       };
     }
     // Prefer click position for line/polygon so popup anchors where the user clicked.
@@ -148,6 +165,7 @@ export class MapManager {
         geometryType: geometry?.getType() ?? '????',
         coordinate: [Number(clickCoordinate[0].toFixed(6)), Number(clickCoordinate[1].toFixed(6))],
         properties,
+        metrics,
       };
     }
     const center = geometry ? toLonLat(getCenter(geometry.getExtent())) : undefined;
@@ -158,7 +176,26 @@ export class MapManager {
       geometryType: geometry?.getType() ?? '????',
       coordinate: center ? [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))] : undefined,
       properties,
+      metrics,
     };
+  }
+
+  private computeMetrics(geometry?: Geometry) {
+    if (!geometry) return undefined;
+    const type = geometry.getType();
+    if (type === 'LineString') {
+      const line = geometry as LineString;
+      return {length: getLength(line, {projection: 'EPSG:3857'}), vertexCount: line.getCoordinates().length};
+    }
+    if (type === 'Polygon') {
+      const polygon = geometry as Polygon;
+      return {
+        area: getArea(polygon, {projection: 'EPSG:3857'}),
+        perimeter: getLength(polygon, {projection: 'EPSG:3857'}),
+        vertexCount: polygon.getCoordinates()[0]?.length ?? 0,
+      };
+    }
+    return undefined;
   }
 
   private serializeValue(value: unknown) {
@@ -192,10 +229,12 @@ export class MapManager {
   private clearDrawingInteractions() {
     if (this.geometryListener) unByKey(this.geometryListener);
     this.geometryListener = undefined;
-    [this.draw, this.modify, this.snap].forEach((interaction) => { if (interaction) this.map.removeInteraction(interaction); });
+    [this.draw, this.snap].forEach((interaction) => { if (interaction) this.map.removeInteraction(interaction); });
     this.draw = undefined;
-    this.modify = undefined;
     this.snap = undefined;
+    this.modifyCollection.clear();
+    this.modify?.setActive(true);
+    this.stopMeasure();
     this.select.setActive(true);
     this.onMeasurementChange();
   }
@@ -215,22 +254,25 @@ export class MapManager {
 
   setDrawMode(mode?: DrawMode, record?: LayerRecord) {
     this.clearDrawingInteractions();
-    if (!mode || !record || record.kind !== 'vector') return;
+    if (!mode) return;
+    if (mode === 'measureLine' || mode === 'measureArea') {
+      this.startMeasure(mode);
+      return;
+    }
+    if (!record || record.kind !== 'vector') return;
     const source = this.getVectorSource(record);
     if (!source) return;
 
     if (mode === 'modify') {
-      this.modify = new Modify({source});
-      this.snap = new Snap({source});
-      this.map.addInteraction(this.modify);
-      this.map.addInteraction(this.snap);
-      this.modify.on('modifyend', () => this.onDrawingChange());
+      this.modifyCollection.clear();
+      source.getFeatures().forEach((feature) => this.modifyCollection.push(feature));
       return;
     }
 
     if (!record.drawing) return;
 
     this.select.setActive(false);
+    this.modify?.setActive(false);
     this.draw = new Draw({source, type: mode, stopClick: true});
     this.snap = new Snap({source});
     this.map.addInteraction(this.draw);
@@ -248,6 +290,66 @@ export class MapManager {
       this.onDrawingChange();
     });
   }
+
+  private startMeasure(mode: 'measureLine' | 'measureArea') {
+    this.ensureMeasureOverlay();
+    this.measureSource = new VectorSource();
+    this.select.setActive(false);
+    this.draw = new Draw({source: this.measureSource, type: mode === 'measureLine' ? 'LineString' : 'Polygon', stopClick: true});
+    this.map.addInteraction(this.draw);
+    this.measurePointerKey = this.map.on('pointermove', (event) => { this.measureOverlay?.setPosition(event.coordinate); });
+    this.draw.on('drawstart', (event) => {
+      const geometry = event.feature.getGeometry();
+      if (geometry) this.geometryListener = geometry.on('change', () => this.updateMeasureOverlay(geometry));
+    });
+    this.draw.on('drawend', (event) => {
+      if (this.geometryListener) unByKey(this.geometryListener);
+      this.geometryListener = undefined;
+      this.updateMeasureOverlay(event.feature.getGeometry());
+      this.measureSource?.clear();
+    });
+  }
+
+  private stopMeasure() {
+    if (this.measurePointerKey) unByKey(this.measurePointerKey);
+    this.measurePointerKey = undefined;
+    if (this.measureOverlay) this.map.removeOverlay(this.measureOverlay);
+    this.measureOverlay = undefined;
+    this.measureElement = undefined;
+    this.measureSource = undefined;
+  }
+
+  private ensureMeasureOverlay() {
+    if (this.measureOverlay) return;
+    const element = document.createElement('div');
+    element.className = 'map-measure-tooltip';
+    element.style.display = 'none';
+    this.measureElement = element;
+    this.measureOverlay = new Overlay({element, positioning: 'top-left', offset: [14, -46], stopEvent: false});
+    this.map.addOverlay(this.measureOverlay);
+  }
+
+  private updateMeasureOverlay(geometry?: Geometry) {
+    if (!this.measureElement) return;
+    const text = geometry ? this.formatMeasurement(geometry) : undefined;
+    if (text) {
+      this.measureElement.textContent = text;
+      this.measureElement.style.display = 'block';
+    } else {
+      this.measureElement.style.display = 'none';
+    }
+  }
+
+  clearDrawingFeatures(record: LayerRecord) {
+    const source = this.getVectorSource(record);
+    if (!source) return;
+    source.clear();
+    this.select.getFeatures().clear();
+    this.onDrawingChange();
+  }
+
+  finishDrawing() { this.draw?.finishDrawing(); }
+  abortDrawing() { this.draw?.abortDrawing(); }
 
   deleteFeature(record: LayerRecord, featureId?: string) {
     const source = this.getVectorSource(record);

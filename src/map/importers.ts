@@ -90,4 +90,12 @@ export async function importCsv(file: File): Promise<LayerRecord> {
   return createVectorLayer(file.name, features);
 }
 
+export async function importGeoJsonFromUrl(url: string, name = '示例空间数据'): Promise<LayerRecord> {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`示例数据加载失败：HTTP ${response.status}`);
+  const features = new GeoJSON().readFeatures(await response.text(), {featureProjection: 'EPSG:3857'});
+  assertFeatures(name, features);
+  return createVectorLayer(name, features);
+}
+
 

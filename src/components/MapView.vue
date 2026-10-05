@@ -8,7 +8,6 @@ import type {BaseMapOption, LayerRecord, PointVisualizationConfig, SelectedFeatu
 import type {MapViewState} from '@/types/workspace';
 import type {PlaybackPosition, PlaybackTrack} from '@/map/trackPlayback';
 import {useMapStore} from '@/stores/map';
-import {toPopupPosition} from '@/core/mapInteraction.js';
 import type { MapFacade } from '@/map/facade';
 
 const emit = defineEmits<{ready: [facade: MapFacade]; viewChange: [state: MapViewState]; pointerChange: [coordinate?: [number, number]]; measurementChange: [value?: string]; drawingChange: []}>();
@@ -19,17 +18,12 @@ let manager: MapManager | undefined;
 let cesiumManager: CesiumManager | undefined;
 let realtimeLayer: LayerRecord | undefined;
 let playbackOverlay: {track: PlaybackTrack; position: PlaybackPosition; follow: boolean} | undefined;
-const popupPosition = ref<{x: number; y: number}>();
 const editing = ref(false);
-let stopCesiumPopupTracking: (() => void) | undefined;
 
 onMounted(() => {
   if (!target2d.value) return;
   manager = new MapManager(target2d.value, mapStore.activeBaseMap, handleFeatureSelected, (value) => emit('measurementChange', value), () => emit('drawingChange'));
   manager.map.on('moveend', () => emit('viewChange', manager?.getViewState() as MapViewState));
-  manager.map.on('pointerdrag', syncPopupPosition);
-  manager.map.on('postrender', syncPopupPosition);
-  manager.map.on('moveend', syncPopupPosition);
   manager.map.on('pointermove', (event) => emit('pointerChange', manager?.getCoordinateFromPixel(event.pixel)));
   target2d.value.addEventListener('mouseleave', () => emit('pointerChange'));
   target3d.value?.addEventListener('mouseleave', () => emit('pointerChange'));
@@ -37,20 +31,16 @@ onMounted(() => {
   void switchEngine(mapStore.mapEngine);
   emit('ready', facade);
 });
-onBeforeUnmount(() => { stopCesiumPopupTracking?.(); cesiumManager?.destroy(); manager?.dispose(); });
+onBeforeUnmount(() => { cesiumManager?.destroy(); manager?.dispose(); });
 
 watch(() => mapStore.mapEngine, (engine) => { void switchEngine(engine); });
 watch(() => mapStore.layers, syncCesiumLayers, {deep: true});
 watch(() => mapStore.queryResults, (results) => cesiumManager?.setQueryResults(results), {deep: true});
-watch(() => mapStore.selectedFeature, (feature) => { if (!feature) popupPosition.value = undefined; });
 watch(() => mapStore.activeBaseMapId, () => cesiumManager?.setBaseMap(mapStore.activeBaseMap));
 
 async function switchEngine(engine: '2d' | '3d') {
   if (!manager) return;
-  popupPosition.value = undefined;
   if (engine === '2d') {
-    stopCesiumPopupTracking?.();
-    stopCesiumPopupTracking = undefined;
     cesiumManager?.setDrawMode();
     cesiumManager?.stopSpatialQuery();
     const state = cesiumManager?.getViewState(manager.getViewState().rotation);
@@ -73,8 +63,6 @@ async function switchEngine(engine: '2d' | '3d') {
     (value) => emit('measurementChange', value),
     () => { syncCesiumLayers(); emit('drawingChange'); },
   );
-  stopCesiumPopupTracking?.();
-  stopCesiumPopupTracking = cesiumManager.onSceneRender(syncPopupPosition);
   cesiumManager.setBaseMap(mapStore.activeBaseMap);
   cesiumManager.setQueryResults(mapStore.queryResults);
   syncCesiumLayers();
@@ -88,18 +76,16 @@ function handleCesiumPointerMove(event: MouseEvent) {
   const rect = target3d.value.getBoundingClientRect();
   emit('pointerChange', cesiumManager?.getCoordinateFromScreen([event.clientX - rect.left, event.clientY - rect.top]));
 }
-function handleFeatureSelected(feature?: SelectedFeatureInfo, screenPosition?: number[]) {
+function handleFeatureSelected(feature?: SelectedFeatureInfo) {
   mapStore.setSelectedFeature(feature);
-  popupPosition.value = feature ? toPopupPosition(screenPosition) : undefined;
 }
-function syncPopupPosition() {
-  const coordinate = mapStore.selectedFeature?.coordinate;
-  if (!popupPosition.value || !coordinate) return;
-  const position = mapStore.mapEngine === '3d' ? cesiumManager?.getScreenPosition(coordinate) : manager?.getScreenPosition(coordinate);
-  const nextPosition = toPopupPosition(position);
-  if (nextPosition) popupPosition.value = nextPosition;
+function closeFeaturePopup() { mapStore.setSelectedFeature(); }
+function focusSelectedFeature() {
+  const feature = mapStore.selectedFeature;
+  const layer = feature ? mapStore.layers.find((item) => item.id === feature.layerId) : undefined;
+  if (!feature || !layer || !feature.featureId) return;
+  manager?.focusFeature(toRaw(layer) as unknown as LayerRecord, feature.featureId);
 }
-function closeFeaturePopup() { mapStore.setSelectedFeature(); popupPosition.value = undefined; }
 function deleteSelectedFeature() {
   const feature = mapStore.selectedFeature;
   const layer = feature ? mapStore.layers.find((item) => item.id === feature.layerId) : undefined;
@@ -131,6 +117,9 @@ function deleteSelectedDrawingFeatures(layer?: LayerRecord) {
     ? cesiumManager?.deleteSelectedDrawingFeatures(layer) ?? 0
     : manager?.deleteSelectedDrawingFeatures(layer) ?? 0;
 }
+function finishDrawing() { manager?.finishDrawing(); }
+function abortDrawing() { manager?.abortDrawing(); }
+function clearDrawingFeatures(layer: LayerRecord) { manager?.clearDrawingFeatures(layer); }
 function startSpatialQuery(onExtent: (extent: [number, number, number, number]) => void) {
   if (mapStore.mapEngine === '3d') {
     manager?.stopSpatialQuery();
@@ -157,6 +146,9 @@ const facade: MapFacade = {
   getViewState,
   setViewState,
   setDrawMode,
+  finishDrawing,
+  abortDrawing,
+  clearDrawingFeatures,
   deleteSelectedDrawingFeatures,
   startSpatialQuery,
   focusFeature,
@@ -176,7 +168,7 @@ defineExpose(facade);
   <div class="map-container">
     <div ref="target2d" v-show="mapStore.mapEngine === '2d'" class="map-engine map-engine-2d"></div>
     <div ref="target3d" v-show="mapStore.mapEngine === '3d'" class="map-engine cesium-container"></div>
-    <MapFeaturePopup v-if="mapStore.selectedFeature && popupPosition" :feature="mapStore.selectedFeature" :position="popupPosition" :editable="editing" @close="closeFeaturePopup" @delete="deleteSelectedFeature" />
+    <MapFeaturePopup v-if="mapStore.selectedFeature" :feature="mapStore.selectedFeature" :editable="editing" @close="closeFeaturePopup" @delete="deleteSelectedFeature" @focus="focusSelectedFeature" />
     <div class="map-hint">{{ mapStore.mapEngine === '3d' ? 'Cesium 3D：支持点、线、面绘制与测地量算；右键或双击完成' : '点击矢量要素查看属性 · 绘制线、面可实时量测' }}</div>
   </div>
 </template>

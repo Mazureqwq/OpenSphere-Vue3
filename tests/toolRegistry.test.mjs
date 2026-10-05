@@ -1,39 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { toolIds, toolTitles } from '../src/tools/toolMeta.ts';
 
-const toolIds = [
-  'layers',
-  'realtime',
-  'visualization',
-  'coordinate',
-  'playback',
-  'drawing',
-  'query',
-  'vectorStyle',
-  'categoryStyle',
-  'legend',
-  'timeField',
-  'timeline',
-  'feature',
-];
-
-const toolTitles = {
-  layers: '图层',
-  realtime: '实时轨迹',
-  visualization: '点位展示',
-  coordinate: '坐标定位',
-  playback: '轨迹回放',
-  drawing: '绘制与量测',
-  query: '空间属性查询',
-  vectorStyle: '基础样式',
-  categoryStyle: '分类样式',
-  legend: '图例',
-  timeField: '时间字段',
-  timeline: '时间轴',
-  feature: '要素信息',
-};
-
-test('tool registry covers all tool ids with titles', () => {
+test('tool metadata lists every tool id with a title', () => {
+  assert.ok(toolIds.length > 0);
+  assert.equal(toolIds.length, new Set(toolIds).size);
   for (const id of toolIds) {
     assert.equal(typeof toolTitles[id], 'string');
     assert.ok(toolTitles[id].length > 0);

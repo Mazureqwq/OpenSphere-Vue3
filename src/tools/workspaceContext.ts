@@ -20,6 +20,7 @@ export interface WorkspaceContext {
   closeActiveTool: () => void;
 
   handleFiles: (files: FileList | null) => void | Promise<void>;
+  loadDemoData: () => void | Promise<void>;
   addWmsLayer: (input: WmsLayerInput) => void;
   handleRemoveLayer: (id: string) => void;
   editLayer: (id: string) => void;
@@ -32,8 +33,12 @@ export interface WorkspaceContext {
 
   drawingSessionLayerId: Ref<string | undefined>;
   drawingEditing: Ref<boolean>;
+  activeDrawingMode: Ref<DrawMode | undefined>;
   setDrawMode: (mode: DrawMode) => void;
+  finishCurrentDrawing: () => void;
   cancelCurrentDrawing: () => void;
+  deleteSelectedDrawingFeatures: () => void;
+  clearDrawingFeatures: () => void;
 
   realtimeStatus: Ref<RealtimeStatus>;
   realtimeTrackCount: Ref<number>;

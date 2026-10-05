@@ -1,8 +1,10 @@
 import type { Ref } from 'vue';
 import type { MapFacade } from '@/map/facade';
+import { ElMessage } from 'element-plus';
 import {
   importCsv,
   importGeoJson,
+  importGeoJsonFromUrl,
   importGpx,
   importKml,
   importKmz,
@@ -28,11 +30,34 @@ export function useLayerWorkspace(options: {
   onEdit?: (layer: LayerRecord) => void;
 }) {
   const mapStore = useMapStore();
-  return useLayerActions({
+  const actions = useLayerActions({
     mapStore,
     mapView: options.mapFacade,
     importers,
     onBeforeRemove: options.onBeforeRemove,
     onEdit: options.onEdit,
   });
+
+  function dedupeDemoLayers() {
+    const demoName = '示例空间数据';
+    const copies = mapStore.layers.filter((layer) => layer.demo || layer.name === demoName);
+    copies.slice(1).forEach((layer) => actions.handleRemoveLayer(layer.id));
+    if (copies[0]) copies[0].demo = true;
+    return copies.length > 0;
+  }
+
+  async function loadDemoData() {
+    if (dedupeDemoLayers()) return;
+    try {
+      const layer = await importGeoJsonFromUrl('/data/spatial-query-demo.geojson', '示例空间数据');
+      layer.demo = true;
+      if (dedupeDemoLayers()) return;
+      actions.addLayer(layer, true);
+      ElMessage.success('已加载示例空间数据');
+    } catch (error) {
+      console.warn('[demo-data] 示例空间数据加载失败', error);
+    }
+  }
+
+  return { ...actions, loadDemoData };
 }

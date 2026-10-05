@@ -58,7 +58,7 @@ export function createSnapshot(input: {
 }
 
 function serializeLayer(layer: LayerRecord): Array<WorkspaceVectorLayer | WorkspaceWmsLayer> {
-  if (layer.realtime) return [];
+  if (layer.realtime || layer.demo) return [];
   if (layer.kind === 'vector' && layer.vectorStyle) {
     const source = (layer.source as SourceLayer).getSource?.();
     if (!source) return [];

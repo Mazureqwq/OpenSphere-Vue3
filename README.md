@@ -115,7 +115,6 @@ npm run preview
 ```text
 src/
 ├─ components/       地图面板和业务组件
-├─ data/              示例空间数据
 ├─ map/               地图引擎、图层、样式和交互逻辑
 ├─ search/            地名、坐标和图层搜索服务
 ├─ stores/            Pinia 状态管理

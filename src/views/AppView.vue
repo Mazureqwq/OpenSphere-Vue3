@@ -25,6 +25,7 @@ const measurementText = computed(() => context.measurement.value);
 
 function onMapReady(facade: MapFacade) {
   mapFacade.value = facade;
+  void context.loadDemoData();
 }
 </script>
 

@@ -1,5 +1,6 @@
 import type { Component } from 'vue';
 import type { ToolId } from '@/tools/types';
+import { toolTitles } from './toolMeta';
 import LayersTool from '@/tools/components/LayersTool.vue';
 import RealtimeTool from '@/tools/components/RealtimeTool.vue';
 import VisualizationTool from '@/tools/components/VisualizationTool.vue';
@@ -20,21 +21,7 @@ export interface ToolDefinition {
   component: Component;
 }
 
-export const toolTitles: Record<ToolId, string> = {
-  layers: '图层',
-  realtime: '实时轨迹',
-  visualization: '点位展示',
-  coordinate: '坐标定位',
-  playback: '轨迹回放',
-  drawing: '绘制与量测',
-  query: '空间属性查询',
-  vectorStyle: '基础样式',
-  categoryStyle: '分类样式',
-  legend: '图例',
-  timeField: '时间字段',
-  timeline: '时间轴',
-  feature: '要素信息',
-};
+export { toolTitles };
 
 export const toolRegistry: Record<ToolId, ToolDefinition> = {
   layers: { id: 'layers', title: toolTitles.layers, component: LayersTool },

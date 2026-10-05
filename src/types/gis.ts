@@ -28,10 +28,12 @@ export interface LayerRecord {
   timeFilter?: TimeFilterConfig;
   drawing?: boolean;
   realtime?: boolean;
+  demo?: boolean;
 }
 
 export interface QueryResult { id: string; layerId: string; properties: Record<string, string>; }
-export interface SelectedFeatureInfo { featureId?: string; layerId: string; layerName: string; geometryType: string; coordinate?: [number, number]; properties: Record<string, string>; }
+export interface FeatureMetrics { length?: number; area?: number; perimeter?: number; vertexCount?: number; }
+export interface SelectedFeatureInfo { featureId?: string; layerId: string; layerName: string; geometryType: string; coordinate?: [number, number]; properties: Record<string, string>; metrics?: FeatureMetrics; }
 export interface BaseMapLayerOption { id: string; url: string; attribution: string; }
 export interface BaseMapOption { id: string; name: string; layers: BaseMapLayerOption[]; region: 'china' | 'global'; }
 export type VectorLayer = Layer<VectorSource>;

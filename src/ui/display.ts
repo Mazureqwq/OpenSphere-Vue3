@@ -2,6 +2,7 @@ const fieldLabels: Record<string, string> = {
   name: '名称', category: '分类', district: '区域', status: '状态', priority: '优先级', capacity: '容量',
   id: '标识', trackId: '轨迹标识', deviceId: '设备标识', vehicleId: '车辆标识',
   timestamp: '时间', time: '时间', longitude: '经度', latitude: '纬度', lon: '经度', lat: '纬度', lng: '经度',
+  sequence: '序号', speed: '速度', type: '类型', address: '地址', description: '描述',
   realtimeRole: '实时类型', sourceType: '数据来源',
 };
 

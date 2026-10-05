@@ -11,6 +11,9 @@ export interface MapFacade {
   getViewState(): MapViewState | undefined;
   setViewState(state: MapViewState): void;
   setDrawMode(mode?: DrawMode, layer?: LayerRecord): boolean | void;
+  finishDrawing(): void;
+  abortDrawing(): void;
+  clearDrawingFeatures(layer: LayerRecord): void;
   deleteSelectedDrawingFeatures(layer?: LayerRecord): number;
   startSpatialQuery(onExtent: (extent: [number, number, number, number]) => void): void;
   focusFeature(layer: LayerRecord, featureId: string): void;

@@ -1,5 +1,5 @@
 import { ref, toRaw, type Ref } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import type { DrawMode } from "@/map/drawing";
 import type { LayerRecord } from "@/types/gis";
 import type { useMapStore } from "@/stores/map";
@@ -8,6 +8,9 @@ type MapStore = ReturnType<typeof useMapStore>;
 
 export interface DrawingMapView {
   setDrawMode: (mode?: DrawMode, layer?: LayerRecord) => void;
+  finishDrawing: () => void;
+  abortDrawing: () => void;
+  clearDrawingFeatures: (layer: LayerRecord) => void;
   deleteSelectedDrawingFeatures: (layer?: LayerRecord) => number;
 }
 
@@ -34,6 +37,11 @@ export function useDrawingSession(options: DrawingSessionOptions) {
   }
 
   function setDrawMode(mode: DrawMode) {
+    if (mode === 'measureLine' || mode === 'measureArea') {
+      activeDrawingMode.value = mode;
+      options.mapView.value?.setDrawMode(mode);
+      return;
+    }
     const layer = getLayer();
     if (!layer) {
       ElMessage.warning("请先创建绘制图层");
@@ -45,9 +53,32 @@ export function useDrawingSession(options: DrawingSessionOptions) {
   }
 
   function cancelCurrentDrawing() {
+    options.mapView.value?.abortDrawing();
     options.mapView.value?.setDrawMode();
     options.measurement.value = undefined;
     activeDrawingMode.value = undefined;
+  }
+
+  function finishCurrentDrawing() {
+    options.mapView.value?.finishDrawing();
+    options.mapView.value?.setDrawMode();
+    options.measurement.value = undefined;
+    activeDrawingMode.value = undefined;
+  }
+
+  function clearDrawingFeatures() {
+    const layer = getLayer();
+    if (!layer) {
+      ElMessage.warning("请先创建绘制图层");
+      return;
+    }
+    ElMessageBox.confirm("将删除当前绘制图层的所有要素，此操作不可撤销。", "清除全部绘制", { type: "warning", confirmButtonText: "清除", cancelButtonText: "取消" })
+      .then(() => {
+        options.mapView.value?.clearDrawingFeatures(toRaw(layer) as unknown as LayerRecord);
+        options.mapStore.refreshFeatureCount(layer.id);
+        ElMessage.success("已清除全部绘制要素");
+      })
+      .catch(() => {});
   }
 
   function stopDrawing() {
@@ -76,8 +107,10 @@ export function useDrawingSession(options: DrawingSessionOptions) {
     getLayer,
     start,
     setDrawMode,
+    finishCurrentDrawing,
     cancelCurrentDrawing,
     stopDrawing,
     deleteSelectedDrawingFeatures,
+    clearDrawingFeatures,
   };
 }
