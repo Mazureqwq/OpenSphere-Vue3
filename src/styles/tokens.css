@@ -1,0 +1,71 @@
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}
+
+:root {
+  --os-bg-canvas: #0b1018;
+  --os-bg-shell: #121923;
+  --os-bg-surface: #18212d;
+  --os-bg-elevated: #202b38;
+  --os-bg-hover: #263547;
+  --os-bg-active: #1d3d61;
+  --os-border-subtle: #2a3746;
+  --os-border-strong: #41546a;
+  --os-text-primary: #f3f7fb;
+  --os-text-secondary: #b8c5d3;
+  --os-text-muted: #7d91a5;
+  --os-accent: #2f80ed;
+  --os-accent-strong: #5ea5ff;
+  --os-accent-soft: rgb(47 128 237 / 18%);
+  --os-success: #35b979;
+  --os-warning: #e6a23c;
+  --os-danger: #ed6a5e;
+  --os-info: #7ea8d7;
+  --os-space-1: 4px;
+  --os-space-2: 8px;
+  --os-space-3: 12px;
+  --os-space-4: 16px;
+  --os-space-5: 20px;
+  --os-space-6: 24px;
+  --os-radius-sm: 6px;
+  --os-radius-md: 8px;
+  --os-radius-lg: 12px;
+  --os-control-height: 32px;
+  --os-compact-control-height: 28px;
+  --os-rail-width: 56px;
+  --os-panel-width: 328px;
+  --os-inspector-width: 360px;
+  --os-motion-fast: 140ms;
+  --os-motion-base: 180ms;
+  --os-z-map: 0;
+  --os-z-map-control: 4;
+  --os-z-status: 5;
+  --os-z-panel: 8;
+  --os-z-popover: 20;
+  --os-z-dialog: 1000;
+  color: var(--os-text-primary);
+  background: var(--os-bg-canvas);
+  font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-synthesis: none;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { min-width: 0; min-height: 100%; }
+body { color: var(--os-text-primary); background: var(--os-bg-canvas); }
+button, input, select, textarea { font: inherit; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--os-accent-strong);
+  outline-offset: 2px;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: #405267; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #587089; background-clip: padding-box; }

@@ -1,4 +1,5 @@
-import { ref, type Ref } from 'vue';
+import { computed, ref, type Ref } from 'vue';
+import { storeToRefs } from 'pinia';
 import type { MapFacade } from '@/map/facade';
 import { useActiveTool } from '@/tools/useActiveTool';
 import type { WorkspaceContext } from '@/tools/workspaceContext';
@@ -8,10 +9,14 @@ import { useDrawingWorkspace } from '@/composables/workspace/useDrawingWorkspace
 import { useQueryWorkspace } from '@/composables/workspace/useQueryWorkspace';
 import { useTrackingWorkspace } from '@/composables/workspace/useTrackingWorkspace';
 import { useViewWorkspace } from '@/composables/workspace/useViewWorkspace';
+import { useWorkbenchLayout } from '@/composables/useWorkbenchLayout';
+import { useMapStore } from '@/stores/map';
+import { useSelectionStore } from '@/stores/selection';
 
 export function useMapWorkspace(mapFacade: Ref<MapFacade | undefined>) {
   const showWmsDialog = ref(false);
-  const { activeTool, openTool, toggleTool: rawToggleTool, closeTool } = useActiveTool();
+  const mapStore = useMapStore();
+  const { activeTool, openTool: rawOpenTool, toggleTool: rawToggleTool, closeTool } = useActiveTool();
 
   // late-bound stoppers to avoid init order issues
   const stoppers = {
@@ -36,7 +41,7 @@ export function useMapWorkspace(mapFacade: Ref<MapFacade | undefined>) {
     },
     onEdit: (layer) => {
       drawing.start(layer.id, true);
-      openTool('drawing');
+      rawOpenTool('drawing');
     },
   });
 
@@ -59,11 +64,18 @@ export function useMapWorkspace(mapFacade: Ref<MapFacade | undefined>) {
   stoppers.clearPlayback = () => tracking.playback.clear();
   stoppers.stopAllTracking = () => tracking.stopAllTracking();
 
+  function openTool(tool: ToolId) {
+    if (activeTool.value === 'drawing' && tool !== 'drawing') drawing.stopDrawing();
+    const openingDrawing = tool === 'drawing' && activeTool.value !== 'drawing';
+    rawOpenTool(tool);
+    if (openingDrawing && !drawing.drawingSessionLayerId.value) drawing.openExistingDrawingSession();
+  }
+
   function toggleTool(tool: ToolId) {
     if (activeTool.value === 'drawing' && tool !== 'drawing') drawing.stopDrawing();
     const openingDrawing = tool === 'drawing' && activeTool.value !== 'drawing';
     rawToggleTool(tool);
-    if (openingDrawing) drawing.openExistingDrawingSession();
+    if (openingDrawing && !drawing.drawingSessionLayerId.value) drawing.openExistingDrawingSession();
   }
 
   function closeActiveTool() {
@@ -71,15 +83,39 @@ export function useMapWorkspace(mapFacade: Ref<MapFacade | undefined>) {
     closeTool();
   }
 
+  function zoomToLayer(layerId: string) {
+    if (mapStore.layers.some((item) => item.id === layerId)) mapFacade.value?.zoomToLayer(layerId);
+  }
+
+  const selectionStore = useSelectionStore();
+  const layout = useWorkbenchLayout({
+    activeTool,
+    openTool,
+    toggleTool,
+    closeTool: closeActiveTool,
+    selection: { current: storeToRefs(selectionStore).current, clear: () => selectionStore.clear() },
+  });
+
   const context: WorkspaceContext = {
     currentView: view.currentView,
     measurement: view.measurement,
     pointerCoordinate: view.pointerCoordinate,
     showWmsDialog,
     activeTool,
-    openTool,
-    toggleTool,
-    closeActiveTool,
+    openTool: layout.openWorkbenchTool,
+    toggleTool: layout.toggleWorkbenchTool,
+    closeActiveTool: layout.closeWorkbenchTool,
+    activeSection: layout.activeSection,
+    contentTab: layout.contentTab,
+    contentPanelOpen: layout.contentPanelOpen,
+    inspectorTarget: layout.inspectorTarget,
+    bottomDrawerTab: layout.bottomDrawerTab,
+    openSection: layout.openSection,
+    setContentTab: layout.setContentTab,
+    toggleContentPanel: layout.toggleContentPanel,
+    openBottomDrawer: layout.openBottomDrawer,
+    closeBottomDrawer: layout.closeBottomDrawer,
+    closeInspector: layout.closeInspector,
     handleFiles: layers.handleFiles,
     loadDemoData: layers.loadDemoData,
     addWmsLayer: layers.addWmsLayer,
@@ -91,6 +127,7 @@ export function useMapWorkspace(mapFacade: Ref<MapFacade | undefined>) {
     locateCoordinate: view.locateCoordinate,
     requestSpatialQuery: query.requestSpatialQuery,
     focusQueryResult: query.focusQueryResult,
+    zoomToLayer,
     drawingSessionLayerId: drawing.drawingSessionLayerId,
     drawingEditing: drawing.drawingEditing,
     activeDrawingMode: drawing.activeDrawingMode,

@@ -40,13 +40,13 @@ const measureTools: { mode: DrawMode; label: string }[] = [
 ];
 
 const hint = computed(() => {
-  if (props.activeMode === "modify") return "拖拽顶点调整图形，点击空白处结束编辑。";
-  if (props.activeMode === "measureLine") return "连续点击绘制测距线，双击结束；结果浮动显示，不落图。";
-  if (props.activeMode === "measureArea") return "连续点击绘制测面积范围，双击结束；结果浮动显示，不落图。";
-  if (props.activeMode) return "在地图上点击绘制，双击结束；绘制中实时显示距离/面积。";
+  if (props.activeMode === "modify") return "拖拽顶点调整图形。";
+  if (props.activeMode === "measureLine") return "连续点击绘制，双击结束，结果浮层显示。";
+  if (props.activeMode === "measureArea") return "连续点击绘制，双击结束，结果浮层显示。";
+  if (props.activeMode) return "点击地图绘制，双击结束。";
   return mapStore.mapEngine === "3d"
-    ? "3D 中单击添加节点，右键或双击完成；编辑顶点请切回 2D。"
-    : "选择上方工具开始绘制或量测；双击结束。点击选中线/面/点要素即可拖动顶点。";
+    ? "3D 下单击加点，右键或双击完成；编辑顶点请切换 2D。"
+    : "选择工具开始；选中要素即可拖动顶点。";
 });
 </script>
 
@@ -60,10 +60,10 @@ const hint = computed(() => {
     </div>
 
     <div v-if="!drawingLayer && !hasDrawingLayer" class="empty-state feature-empty">
-      创建绘制图层后<br /><small>可标注点、线、面并量测距离/面积</small>
+      创建绘制图层后<br /><small>标注点 / 线 / 面，支持量测</small>
     </div>
     <div v-else-if="!drawingLayer" class="empty-state feature-empty">
-      请选择图层后点击图层列表中的编辑，或创建绘制图层
+      选择绘制图层，或新建一个
     </div>
 
     <template v-else>

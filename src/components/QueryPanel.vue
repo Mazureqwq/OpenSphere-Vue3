@@ -49,7 +49,7 @@ function clearSpatial() { if (mapStore.query) mapStore.setQuery({...mapStore.que
         <el-input v-model="value" placeholder="查询值" @keyup.enter="apply" />
       </div>
       <div class="query-actions"><el-button size="small" type="primary" @click="apply">查询</el-button><el-button size="small" :disabled="!mapStore.query" @click="requestSpatial">{{ mapStore.mapEngine === '3d' ? 'Shift 拖拽范围' : 'Shift 框选范围' }}</el-button><el-button v-if="mapStore.query?.spatialExtent" size="small" plain @click="clearSpatial">清除范围</el-button></div>
-      <p v-if="mapStore.query?.spatialExtent" class="category-note">{{ mapStore.mapEngine === '3d' ? '空间范围已启用：在 3D 地图上按住 Shift 拖拽地表区域可重新框选。' : '空间范围已启用：在地图上按住 Shift 拖拽矩形可重新框选。' }}</p>
+      <p v-if="mapStore.query?.spatialExtent" class="category-note">{{ mapStore.mapEngine === '3d' ? '按住 Shift 拖拽地表可重新框选' : '按住 Shift 拖拽地图可重新框选' }}</p>
       <div v-if="mapStore.query" class="query-results"><div class="query-result-title">匹配 {{ mapStore.queryResults.length }} 个要素</div><button v-for="result in mapStore.queryResults" :key="result.id" class="query-result" @click="emit('focus', result.layerId, result.id)"><strong>{{ formatDisplayValue(result.properties[mapStore.query?.field] || result.id) }}</strong><span>{{ result.id }}</span></button></div>
     </template>
   </section>

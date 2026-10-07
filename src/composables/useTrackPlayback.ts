@@ -1,11 +1,11 @@
-import { onBeforeUnmount, ref, toRaw, type Ref } from "vue";
+import { onBeforeUnmount, ref, toRaw, watch, type Ref } from "vue";
 import { ElMessage } from "element-plus";
 import { buildPlaybackTracks, getPlaybackPosition, TrackPlaybackController, type PlaybackTrack, type TrackPlaybackState } from "@/map/trackPlayback";
 import type { LayerRecord } from "@/types/gis";
 import type { useMapStore } from "@/stores/map";
 
 type MapStore = ReturnType<typeof useMapStore>;
-interface PlaybackMapView { setTrackPlayback: (sourceLayerId: string, track: PlaybackTrack, position: ReturnType<typeof getPlaybackPosition>, follow: boolean) => void; clearTrackPlayback: () => void; }
+interface PlaybackMapView { setTrackPlayback: (sourceLayerId: string, track: PlaybackTrack, position: ReturnType<typeof getPlaybackPosition>, follow: boolean) => void; clearTrackPlayback: () => void; onUserInteract?: (callback: () => void) => () => void; }
 
 export function useTrackPlayback(options: { mapStore: MapStore; mapView: Ref<PlaybackMapView | undefined> }) {
   const tracks = ref<PlaybackTrack[]>([]);
@@ -27,6 +27,21 @@ export function useTrackPlayback(options: { mapStore: MapStore; mapView: Ref<Pla
     state.value = nextState;
     render();
   });
+
+  let stopUserInteract: (() => void) | undefined = undefined;
+  watch(
+    () => options.mapView.value,
+    (view) => {
+      stopUserInteract?.();
+      stopUserInteract = undefined;
+      if (view?.onUserInteract) {
+        stopUserInteract = view.onUserInteract(() => {
+          if (follow.value) setFollow(false);
+        });
+      }
+    },
+    { immediate: true },
+  );
 
   function load(layerId: string, idField: string, timeField: string) {
     const layer = options.mapStore.layers.find((item) => item.id === layerId);
@@ -53,7 +68,7 @@ export function useTrackPlayback(options: { mapStore: MapStore; mapView: Ref<Pla
   function setSpeed(speed: number) { controller.setSpeed(speed); }
   function setFollow(value: boolean) { follow.value = value; render(); }
   function clear() { controller.clear(); tracks.value = []; sourceLayerId.value = undefined; options.mapView.value?.clearTrackPlayback(); }
-  onBeforeUnmount(() => controller.dispose());
+  onBeforeUnmount(() => { stopUserInteract?.(); controller.dispose(); });
 
   return { tracks, state, follow, controller, load, selectTrack, play, pause, seek, setSpeed, setFollow, clear, sourceLayerId };
 }

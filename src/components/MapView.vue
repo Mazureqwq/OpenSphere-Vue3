@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import {nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch} from 'vue';
 import MapFeaturePopup from '@/components/MapFeaturePopup.vue';
-import {CesiumManager} from '@/map/CesiumManager';
+import type {CesiumManager} from '@/map/CesiumManager';
 import {MapManager} from '@/map/MapManager';
 import type {DrawMode} from '@/map/drawing';
 import type {BaseMapOption, LayerRecord, PointVisualizationConfig, SelectedFeatureInfo} from '@/types/gis';
@@ -16,11 +16,14 @@ const target2d = ref<HTMLElement>();
 const target3d = ref<HTMLElement>();
 let manager: MapManager | undefined;
 let cesiumManager: CesiumManager | undefined;
+let cesiumManagerLoading: Promise<CesiumManager | undefined> | undefined;
 let realtimeLayer: LayerRecord | undefined;
 let playbackOverlay: {track: PlaybackTrack; position: PlaybackPosition; follow: boolean} | undefined;
 const editing = ref(false);
+const isEngineLoading = ref(false);
+let hasUnmounted = false;
 
-onMounted(() => {
+onMounted(async () => {
   if (!target2d.value) return;
   manager = new MapManager(target2d.value, mapStore.activeBaseMap, handleFeatureSelected, (value) => emit('measurementChange', value), () => emit('drawingChange'));
   manager.map.on('moveend', () => emit('viewChange', manager?.getViewState() as MapViewState));
@@ -28,10 +31,10 @@ onMounted(() => {
   target2d.value.addEventListener('mouseleave', () => emit('pointerChange'));
   target3d.value?.addEventListener('mouseleave', () => emit('pointerChange'));
   target3d.value?.addEventListener('mousemove', handleCesiumPointerMove);
-  void switchEngine(mapStore.mapEngine);
+  await switchEngine(mapStore.mapEngine);
   emit('ready', facade);
 });
-onBeforeUnmount(() => { cesiumManager?.destroy(); manager?.dispose(); });
+onBeforeUnmount(() => { hasUnmounted = true; cesiumManager?.destroy(); manager?.dispose(); });
 
 watch(() => mapStore.mapEngine, (engine) => { void switchEngine(engine); });
 watch(() => mapStore.layers, syncCesiumLayers, {deep: true});
@@ -41,6 +44,7 @@ watch(() => mapStore.activeBaseMapId, () => cesiumManager?.setBaseMap(mapStore.a
 async function switchEngine(engine: '2d' | '3d') {
   if (!manager) return;
   if (engine === '2d') {
+    isEngineLoading.value = false;
     cesiumManager?.setDrawMode();
     cesiumManager?.stopSpatialQuery();
     const state = cesiumManager?.getViewState(manager.getViewState().rotation);
@@ -53,23 +57,52 @@ async function switchEngine(engine: '2d' | '3d') {
     return;
   }
   if (!target3d.value) return;
-  await nextTick();
-  manager.setDrawMode();
-  manager.stopSpatialQuery();
-  if (!cesiumManager) cesiumManager = new CesiumManager(
-    target3d.value,
-    mapStore.activeBaseMap,
-    handleFeatureSelected,
-    (value) => emit('measurementChange', value),
-    () => { syncCesiumLayers(); emit('drawingChange'); },
-  );
-  cesiumManager.setBaseMap(mapStore.activeBaseMap);
-  cesiumManager.setQueryResults(mapStore.queryResults);
-  syncCesiumLayers();
-  cesiumManager.syncRealtimeLayer(realtimeLayer);
-  if (playbackOverlay) cesiumManager.setTrackPlayback(playbackOverlay.track, playbackOverlay.position, playbackOverlay.follow);
-  cesiumManager.resize();
-  cesiumManager.setViewState(manager.getViewState());
+  const needsCesiumManager = !cesiumManager;
+  if (needsCesiumManager) isEngineLoading.value = true;
+  try {
+    await nextTick();
+    if (mapStore.mapEngine !== '3d') return;
+    manager.setDrawMode();
+    manager.stopSpatialQuery();
+    const activeCesiumManager = await ensureCesiumManager();
+    if (!activeCesiumManager || mapStore.mapEngine !== '3d') return;
+    activeCesiumManager.setBaseMap(mapStore.activeBaseMap);
+    activeCesiumManager.setQueryResults(mapStore.queryResults);
+    syncCesiumLayers();
+    activeCesiumManager.syncRealtimeLayer(realtimeLayer);
+    if (playbackOverlay) activeCesiumManager.setTrackPlayback(playbackOverlay.track, playbackOverlay.position, playbackOverlay.follow);
+    activeCesiumManager.resize();
+    activeCesiumManager.setViewState(manager.getViewState());
+  } finally {
+    if (needsCesiumManager) isEngineLoading.value = false;
+  }
+}
+function ensureCesiumManager(): Promise<CesiumManager | undefined> {
+  if (cesiumManager) return Promise.resolve(cesiumManager);
+  if (cesiumManagerLoading) return cesiumManagerLoading;
+  const target = target3d.value;
+  if (!target) return Promise.resolve(undefined);
+
+  const loading = Promise.all([
+    import('cesium/Build/Cesium/Widgets/widgets.css'),
+    import('@/map/CesiumManager'),
+  ]).then(([, {CesiumManager: CesiumManagerConstructor}]) => {
+    if (hasUnmounted || mapStore.mapEngine !== '3d' || cesiumManager) return cesiumManager;
+    cesiumManager = new CesiumManagerConstructor(
+      target,
+      mapStore.activeBaseMap,
+      handleFeatureSelected,
+      (value) => emit('measurementChange', value),
+      () => { syncCesiumLayers(); emit('drawingChange'); },
+    );
+    return cesiumManager;
+  });
+  cesiumManagerLoading = loading;
+  const clearLoading = () => {
+    if (cesiumManagerLoading === loading) cesiumManagerLoading = undefined;
+  };
+  void loading.then(clearLoading, clearLoading);
+  return loading;
 }
 function handleCesiumPointerMove(event: MouseEvent) {
   if (mapStore.mapEngine !== '3d' || !target3d.value) return;
@@ -130,11 +163,19 @@ function startSpatialQuery(onExtent: (extent: [number, number, number, number]) 
   manager?.startSpatialQuery(onExtent);
 }
 function focusFeature(layer: LayerRecord, featureId: string) { manager?.focusFeature(layer, featureId); }
+function zoomToLayer(id: string) {
+  const layer = mapStore.layers.find((item) => item.id === id);
+  if (!layer) return;
+  manager?.zoomToLayer(toRaw(layer) as unknown as LayerRecord);
+  const state = manager?.getViewState();
+  if (mapStore.mapEngine === '3d' && state) setViewState(state);
+}
 function setPointVisualization(layer: LayerRecord, config: PointVisualizationConfig) { return manager?.setPointVisualization(layer, config) ?? false; }
 function clearPointVisualization() { manager?.clearPointVisualization(); }
 function syncRealtimeLayer(layer?: LayerRecord) { realtimeLayer = layer; cesiumManager?.syncRealtimeLayer(layer); }
 function setTrackPlayback(sourceLayerId: string, track: PlaybackTrack, position: PlaybackPosition, follow: boolean) { playbackOverlay = {track, position, follow}; manager?.setTrackPlayback(sourceLayerId, track, position, follow); cesiumManager?.setTrackPlayback(track, position, follow); }
 function clearTrackPlayback() { playbackOverlay = undefined; manager?.clearTrackPlayback(); cesiumManager?.clearTrackPlayback(); }
+function onUserInteract(callback: () => void) { manager?.setUserInteractHandler(callback); cesiumManager?.setUserInteractHandler(callback); return () => { manager?.setUserInteractHandler(undefined); cesiumManager?.setUserInteractHandler(undefined); }; }
 function locateCoordinate(coordinate: [number, number]) { manager?.locateCoordinate(coordinate); if (mapStore.mapEngine === '3d') cesiumManager?.locateCoordinate(coordinate); }
 function focusCoordinate(coordinate: [number, number]) { manager?.focusCoordinate(coordinate); if (mapStore.mapEngine === '3d') cesiumManager?.focusCoordinate(coordinate); }
 function clearCoordinateLocation() { manager?.clearCoordinateLocation(); }
@@ -152,11 +193,13 @@ const facade: MapFacade = {
   deleteSelectedDrawingFeatures,
   startSpatialQuery,
   focusFeature,
+  zoomToLayer,
   setPointVisualization,
   clearPointVisualization,
   syncRealtimeLayer,
   setTrackPlayback,
   clearTrackPlayback,
+  onUserInteract,
   locateCoordinate,
   focusCoordinate,
   clearCoordinateLocation,
@@ -168,6 +211,10 @@ defineExpose(facade);
   <div class="map-container">
     <div ref="target2d" v-show="mapStore.mapEngine === '2d'" class="map-engine map-engine-2d"></div>
     <div ref="target3d" v-show="mapStore.mapEngine === '3d'" class="map-engine cesium-container"></div>
+    <div v-if="isEngineLoading" class="map-engine-loading" role="status" aria-live="polite">
+      <span class="map-engine-loading__indicator" aria-hidden="true"></span>
+      <span>正在准备三维引擎</span>
+    </div>
     <MapFeaturePopup v-if="mapStore.selectedFeature" :feature="mapStore.selectedFeature" :editable="editing" @close="closeFeaturePopup" @delete="deleteSelectedFeature" @focus="focusSelectedFeature" />
     <div class="map-hint">{{ mapStore.mapEngine === '3d' ? 'Cesium 3D：支持点、线、面绘制与测地量算；右键或双击完成' : '点击矢量要素查看属性 · 绘制线、面可实时量测' }}</div>
   </div>
@@ -193,12 +240,40 @@ defineExpose(facade);
 .cesium-container .cesium-viewer-bottom {
   display: none;
 }
+.map-engine-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #d7e0ec;
+  background: rgb(10 17 25 / 82%);
+  font-size: 12px;
+  letter-spacing: .04em;
+  pointer-events: none;
+}
+.map-engine-loading__indicator {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgb(102 160 204 / 32%);
+  border-top-color: #76b7e7;
+  border-radius: 50%;
+  animation: map-engine-loading-spin .8s linear infinite;
+}
 .engine-switch {
   display: flex;
   flex-direction: row;
 }
 .engine-switch :deep(.el-button) {
   min-width: 40px;
+}
+@keyframes map-engine-loading-spin {
+  to { transform: rotate(1turn); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-engine-loading__indicator { animation: none; }
 }
 
 </style>

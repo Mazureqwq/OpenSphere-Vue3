@@ -1,0 +1,35 @@
+.os-workbench {
+  min-width: 0;
+  min-height: 100vh;
+  color: var(--os-text-primary);
+  background: var(--os-bg-canvas);
+}
+
+.os-surface {
+  border: 1px solid var(--os-border-subtle);
+  border-radius: var(--os-radius-md);
+  background: var(--os-bg-surface);
+  box-shadow: 0 12px 28px rgb(3 8 14 / 22%);
+}
+
+.os-muted { color: var(--os-text-muted); }
+.os-mono { font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
+.os-status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--os-success); box-shadow: 0 0 0 3px rgb(53 185 121 / 15%); }
+.os-status-dot.is-warning { background: var(--os-warning); box-shadow: 0 0 0 3px rgb(230 162 60 / 15%); }
+.os-status-dot.is-danger { background: var(--os-danger); box-shadow: 0 0 0 3px rgb(237 106 94 / 15%); }
+
+.os-map-overlay {
+  position: absolute;
+  z-index: var(--os-z-map-control);
+}
+
+.os-panel-enter-active, .os-panel-leave-active { transition: opacity var(--os-motion-base), transform var(--os-motion-base); }
+.os-panel-enter-from, .os-panel-leave-to { opacity: 0; transform: translateX(-8px); }
+
+@media (max-width: 1023px) {
+  :root { --os-panel-width: min(352px, calc(100vw - 72px)); --os-inspector-width: min(372px, calc(100vw - 72px)); }
+}
+
+@media (max-width: 767px) {
+  :root { --os-rail-width: 48px; --os-panel-width: min(340px, calc(100vw - 56px)); }
+}

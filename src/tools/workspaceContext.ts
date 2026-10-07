@@ -1,4 +1,4 @@
-import { inject, type InjectionKey, type Ref } from 'vue';
+import { inject, type ComputedRef, type InjectionKey, type Ref } from 'vue';
 import type { RealtimeStatus } from '@/map/realtime';
 import type { DrawMode } from '@/map/drawing';
 import type { PlaybackTrack, TrackPlaybackState } from '@/map/trackPlayback';
@@ -7,6 +7,12 @@ import type { MapViewState } from '@/types/workspace';
 import type { SearchResult } from '@/search/types';
 import type { ToolId } from '@/tools/types';
 import type { WmsLayerInput } from '@/map/ogc';
+import type {
+  BottomDrawerTab,
+  ContentTab,
+  InspectorTarget,
+  WorkbenchSection,
+} from '@/layout/workbenchNavigation';
 
 export interface WorkspaceContext {
   currentView: Ref<MapViewState>;
@@ -19,6 +25,18 @@ export interface WorkspaceContext {
   toggleTool: (tool: ToolId) => void;
   closeActiveTool: () => void;
 
+  activeSection: Ref<WorkbenchSection>;
+  contentTab: Ref<ContentTab>;
+  contentPanelOpen: Ref<boolean>;
+  inspectorTarget: ComputedRef<InspectorTarget>;
+  bottomDrawerTab: Ref<BottomDrawerTab | undefined>;
+  openSection: (section: WorkbenchSection) => void;
+  setContentTab: (tab: ContentTab) => void;
+  toggleContentPanel: () => void;
+  openBottomDrawer: (tab: BottomDrawerTab) => void;
+  closeBottomDrawer: () => void;
+  closeInspector: () => void;
+
   handleFiles: (files: FileList | null) => void | Promise<void>;
   loadDemoData: () => void | Promise<void>;
   addWmsLayer: (input: WmsLayerInput) => void;
@@ -30,6 +48,7 @@ export interface WorkspaceContext {
   locateCoordinate: (coordinate: [number, number]) => void;
   requestSpatialQuery: () => void;
   focusQueryResult: (layerId: string, featureId: string) => void;
+  zoomToLayer: (layerId: string) => void;
 
   drawingSessionLayerId: Ref<string | undefined>;
   drawingEditing: Ref<boolean>;

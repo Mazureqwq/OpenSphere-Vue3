@@ -41,7 +41,7 @@ function swap() { const previous = source.value; source.value = target.value; ta
     <div class="coordinate-systems"><el-select v-model="source" size="small"><el-option v-for="system in systems" :key="system.value" :label="system.label" :value="system.value" /></el-select><span>→</span><el-select v-model="target" size="small"><el-option v-for="system in systems" :key="system.value" :label="system.label" :value="system.value" /></el-select></div>
     <div class="coordinate-actions"><el-button size="small" plain @click="convert">转换</el-button><el-button size="small" type="primary" @click="locate">定位到地图</el-button></div>
     <div class="coordinate-result"><span>{{ target }} 结果</span><strong>{{ resultLabel }}</strong></div>
-    <p class="coordinate-note">输入顺序为经度、纬度。中国境外坐标进行 WGS84 / GCJ-02 转换时保持原值，避免无意义偏移。</p>
+    <p class="coordinate-note">按经度、纬度顺序输入；境外坐标转换时保持原值。</p>
   </section>
 </template>
 

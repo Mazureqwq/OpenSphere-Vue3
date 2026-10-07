@@ -1,58 +1,75 @@
 <script setup lang="ts">
-import {ref, watch} from "vue";
-import {ElMessage} from "element-plus";
-import type {MapViewState} from "@/types/workspace";
-import {loadWorkspaceLibrary, saveWorkspaceLibrary, type WorkspaceLibrary} from "@/workspaceLibrary";
-import LayerTab from "@/components/LayerTab.vue";
-import AreasTab from "@/components/AreasTab.vue";
-import FiltersTab from "@/components/FiltersTab.vue";
-import PlacesTab from "@/components/PlacesTab.vue";
-import "./layer-workspace.css";
+import { ref, watch } from 'vue';
+import { ElMessage } from 'element-plus';
+import type { MapViewState } from '@/types/workspace';
+import { loadWorkspaceLibrary, saveWorkspaceLibrary, type WorkspaceLibrary } from '@/workspaceLibrary';
+import LayerTab from '@/components/LayerTab.vue';
+import AreasTab from '@/components/AreasTab.vue';
+import FiltersTab from '@/components/FiltersTab.vue';
+import PlacesTab from '@/components/PlacesTab.vue';
+import './layer-workspace.css';
 
-const props = defineProps<{view: MapViewState}>();
+const props = withDefaults(defineProps<{ view: MapViewState; mode?: 'content' | 'data' }>(), { mode: 'content' });
 const emit = defineEmits<{
-  create: [name: string, type: "drawing" | "vector"];
+  create: [name: string, type: 'drawing' | 'vector'];
   remove: [id: string];
   edit: [id: string];
   export: [id: string];
+  import: [files: FileList | null];
+  openWms: [];
   locate: [coordinate: [number, number]];
   requestSpatial: [];
   openQuery: [];
   baseMap: [];
 }>();
-const activeTab = ref<"layers" | "areas" | "filters" | "places">("layers");
+const activeTab = ref<'layers' | 'areas' | 'filters' | 'places'>('layers');
 const library = ref<WorkspaceLibrary>(loadWorkspaceLibrary());
 const newLayerDialogVisible = ref(false);
-const newLayerName = ref("");
-const newLayerType = ref<"drawing" | "vector">("drawing");
+const newLayerName = ref('');
+const newLayerType = ref<'drawing' | 'vector'>('drawing');
 
-watch(library, (value) => saveWorkspaceLibrary(value), {deep: true});
+watch(library, (value) => saveWorkspaceLibrary(value), { deep: true });
 function openNewLayerDialog() {
-  newLayerName.value = "";
-  newLayerType.value = "drawing";
+  newLayerName.value = '';
+  newLayerType.value = 'drawing';
   newLayerDialogVisible.value = true;
 }
 function confirmNewLayer() {
   const name = newLayerName.value.trim();
   if (!name) {
-    ElMessage.warning("请输入图层名称");
+    ElMessage.warning('请输入图层名称');
     return;
   }
-  emit("create", name, newLayerType.value);
+  emit('create', name, newLayerType.value);
   newLayerDialogVisible.value = false;
 }
 </script>
 
 <template>
-  <section class="panel layer-workspace-panel">
-    <el-tabs v-model="activeTab" class="workspace-tabs">
+  <section class="panel layer-workspace-panel" :class="{ 'is-data-mode': props.mode === 'data' }">
+    <LayerTab
+      v-if="props.mode === 'data'"
+      data-mode
+      @create="openNewLayerDialog"
+      @remove="emit('remove', $event)"
+      @edit="emit('edit', $event)"
+      @export="emit('export', $event)"
+      @import="emit('import', $event)"
+      @open-wms="emit('openWms')"
+      @base-map="emit('baseMap')"
+    />
+
+    <el-tabs v-else v-model="activeTab" class="workspace-tabs">
       <el-tab-pane label="图层" name="layers">
         <LayerTab
           @create="openNewLayerDialog"
           @remove="emit('remove', $event)"
           @edit="emit('edit', $event)"
           @export="emit('export', $event)"
-          @base-map="emit('baseMap')" />
+          @import="emit('import', $event)"
+          @open-wms="emit('openWms')"
+          @base-map="emit('baseMap')"
+        />
       </el-tab-pane>
       <el-tab-pane label="范围" name="areas">
         <AreasTab :library="library" @open-query="emit('openQuery')" @request-spatial="emit('requestSpatial')" />
@@ -64,6 +81,7 @@ function confirmNewLayer() {
         <PlacesTab :view="props.view" :library="library" @locate="emit('locate', $event)" />
       </el-tab-pane>
     </el-tabs>
+
     <el-dialog
       v-model="newLayerDialogVisible"
       title="新建图层"
@@ -71,16 +89,11 @@ function confirmNewLayer() {
       align-center
       append-to-body
       :close-on-click-modal="false"
-      destroy-on-close>
+      destroy-on-close
+    >
       <el-form @submit.prevent="confirmNewLayer">
         <el-form-item label="图层名称" required>
-          <el-input
-            v-model="newLayerName"
-            autofocus
-            maxlength="50"
-            show-word-limit
-            placeholder="请输入图层名称"
-            @keyup.enter="confirmNewLayer" />
+          <el-input v-model="newLayerName" autofocus maxlength="50" show-word-limit placeholder="请输入图层名称" @keyup.enter="confirmNewLayer" />
         </el-form-item>
         <el-form-item label="图层类型" required>
           <el-select v-model="newLayerType" style="width: 100%">

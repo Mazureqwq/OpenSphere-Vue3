@@ -71,7 +71,7 @@ function formatTime(value?: number) { return value === undefined ? '—' : new D
         <el-slider v-model="progress" :show-tooltip="false" />
         <div class="playback-time"><span>{{ formatTime(state.currentTime) }}</span><small>{{ formatTime(state.end) }}</small></div>
       </template>
-      <p class="playback-note">按轨迹标识与时间字段分组；当前位置采用相邻点之间的线性插值，最多展示已播放的轨迹段。</p>
+      <p class="playback-note">按轨迹标识与时间字段自动分组，回放位置平滑插值。</p>
     </template>
   </section>
 </template>

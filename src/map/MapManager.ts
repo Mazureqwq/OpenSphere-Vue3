@@ -67,6 +67,7 @@ export class MapManager {
   private measureOverlay?: Overlay;
   private measureElement?: HTMLElement;
   private measurePointerKey?: EventsKey;
+  private userInteractHandler?: () => void;
 
   constructor(target: HTMLElement, baseMap: BaseMapOption, onFeatureSelected: (feature?: SelectedFeatureInfo, pixel?: number[]) => void, onMeasurementChange: (value?: string) => void, onDrawingChange: () => void) {
     this.baseLayer = this.createBaseLayer(baseMap);
@@ -84,6 +85,7 @@ export class MapManager {
       event.selected.forEach((feature) => this.modifyCollection.push(feature));
     });
     this.map.on('singleclick', (event) => this.handleFeatureClick(event.pixel));
+    this.map.on('pointerdrag', () => this.userInteractHandler?.());
   }
 
   getScreenPosition(coordinate: [number, number]) {
@@ -427,6 +429,8 @@ export class MapManager {
     this.playbackMarker = undefined;
     this.playbackSourceLayerId = undefined;
   }
+
+  setUserInteractHandler(handler?: () => void) { this.userInteractHandler = handler; }
 
   private ensureTrackPlaybackLayer() {
     if (this.playbackLayer && this.playbackMarker && this.playbackLine) return;

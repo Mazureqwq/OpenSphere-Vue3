@@ -78,6 +78,8 @@ export class CesiumManager {
   private spatialQueryEnd?: Cesium.Cartesian2;
   private spatialQueryPreview?: Cesium.Entity;
   private spatialQueryCallback?: (extent: [number, number, number, number]) => void;
+  private userInteractHandler?: () => void;
+  private userPointerDownListener?: () => void;
 
   constructor(
     target: HTMLElement,
@@ -105,6 +107,8 @@ export class CesiumManager {
     this.viewer.camera.changed.addEventListener(() => this.updateCameraZoomLimits());
     this.interactionHandler = new Cesium.ScreenSpaceEventHandler(this.viewer.scene.canvas);
     this.restorePickInteraction();
+    this.userPointerDownListener = () => this.userInteractHandler?.();
+    this.viewer.scene.canvas.addEventListener("pointerdown", this.userPointerDownListener);
   }
 
   setBaseMap(baseMap: BaseMapOption) {
@@ -166,6 +170,10 @@ export class CesiumManager {
     clearTrackPlaybackModule(this.playbackHost);
   }
 
+  setUserInteractHandler(handler?: () => void) {
+    this.userInteractHandler = handler;
+  }
+
   setViewState(state: MapViewState) {
     setViewStateModule(this.cameraHost, state);
   }
@@ -222,6 +230,7 @@ export class CesiumManager {
   }
 
   destroy() {
+    if (this.userPointerDownListener) this.viewer.scene.canvas.removeEventListener("pointerdown", this.userPointerDownListener);
     this.clearSpatialQuery();
     this.clearDrawingInteraction();
     this.interactionHandler.destroy();

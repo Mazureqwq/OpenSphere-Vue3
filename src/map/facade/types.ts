@@ -17,6 +17,7 @@ export interface MapFacade {
   deleteSelectedDrawingFeatures(layer?: LayerRecord): number;
   startSpatialQuery(onExtent: (extent: [number, number, number, number]) => void): void;
   focusFeature(layer: LayerRecord, featureId: string): void;
+  zoomToLayer(id: string): void;
   setPointVisualization(layer: LayerRecord, config: PointVisualizationConfig): boolean;
   clearPointVisualization(): void;
   syncRealtimeLayer(layer?: LayerRecord): void;
@@ -27,6 +28,7 @@ export interface MapFacade {
     follow: boolean,
   ): void;
   clearTrackPlayback(): void;
+  onUserInteract(callback: () => void): () => void;
   locateCoordinate(coordinate: [number, number]): void;
   focusCoordinate(coordinate: [number, number]): void;
   clearCoordinateLocation(): void;

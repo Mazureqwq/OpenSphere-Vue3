@@ -28,7 +28,7 @@ function formatTime(value?: string) { return value ? new Date(value).toLocaleTim
     <div class="realtime-meta"><span>活动目标</span><strong>{{ trackCount }}</strong></div>
     <div class="realtime-meta"><span>最近更新</span><strong>{{ formatTime(lastUpdated) }}</strong></div>
     <p v-if="error" class="realtime-error">{{ error }}</p>
-    <p class="realtime-note">接收单条对象、数组或 <code>{ data: ... }</code>，坐标字段兼容 <code>lon/lat</code>、<code>lng/lat</code>、<code>longitude/latitude</code>。</p>
+    <p class="realtime-note">支持对象、数组或 { data } 结构；坐标字段兼容 lon/lat 与 longitude/latitude。</p>
   </section>
 </template>
 

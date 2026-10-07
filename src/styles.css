@@ -105,7 +105,7 @@ input {
 }
 .panel {
   margin-bottom: 16px;
-  /* padding: 14px; */
+  padding: var(--os-space-4);
   border: 1px solid #1e3853;
   border-radius: 9px;
   background: #102238;

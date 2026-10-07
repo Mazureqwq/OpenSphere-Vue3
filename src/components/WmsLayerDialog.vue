@@ -59,7 +59,7 @@ function submit() {
       </div>
       <el-form-item><el-checkbox v-model="form.transparent">请求透明背景</el-checkbox></el-form-item>
     </el-form>
-    <p class="wms-note">服务必须允许浏览器访问。受 CORS、鉴权或内网限制的服务需通过项目后端代理转发。</p>
+    <p class="wms-note">服务需允许浏览器跨域访问；受限服务请通过后端代理接入。</p>
     <template #footer><el-button @click="close">取消</el-button><el-button type="primary" :loading="loading" @click="submit">添加图层</el-button></template>
   </el-dialog>
 </template>

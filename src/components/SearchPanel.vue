@@ -77,16 +77,16 @@ onBeforeUnmount(() => {
     <el-input
       v-model="term"
       size="small"
-      placeholder="搜索天地图地点、图层要素或输入经纬度"
+      placeholder="搜索地点、图层或经纬度"
       :prefix-icon="Search"
       clearable
       @input="handleInput"
       @keyup.enter="search"
       @clear="clear" />
     <p v-if="variant === 'dock'" class="search-note">
-      已启用：{{
+      {{
         providers.join("、")
-      }}。天地图地名搜索覆盖全国地点；坐标格式：经度, 纬度
+      }} · 坐标格式：经度, 纬度
     </p>
     <div v-if="showResults && loading" class="search-state">正在搜索...</div>
     <div v-else-if="showResults && term && !results.length" class="search-state">

@@ -1,13 +1,6 @@
 <script setup lang="ts">
-import {
-  Collection,
-  Delete,
-  EditPen,
-  FolderOpened,
-  Location,
-  MoreFilled,
-  Timer,
-} from '@element-plus/icons-vue';
+import { computed } from 'vue';
+import { Delete, FolderOpened, Location, MoreFilled } from '@element-plus/icons-vue';
 import SearchPanel from '@/components/SearchPanel.vue';
 import { useMapStore } from '@/stores/map';
 import { useWorkspaceContext } from '@/tools/workspaceContext';
@@ -15,70 +8,71 @@ import { useWorkspaceContext } from '@/tools/workspaceContext';
 const mapStore = useMapStore();
 const ctx = useWorkspaceContext();
 
+const sectionTitle = computed(() => ({
+  content: '内容',
+  data: '数据',
+  edit: '编辑',
+  analysis: '分析',
+  time: '时间',
+  monitor: '监测',
+})[ctx.activeSection.value]);
+
 function onBaseMapChange(id: string) {
   mapStore.setBaseMap(id);
   ctx.handleBaseMapChange();
 }
+
+function importFiles(event: Event) {
+  const input = event.target as HTMLInputElement;
+  void ctx.handleFiles(input.files);
+  input.value = '';
+}
 </script>
 
 <template>
-  <header class="topbar">
-    <div class="toolbar-left">
-      <div class="brand">
-        <span class="brand-mark">◎</span><span>OpenSphere</span>
+  <header class="atlas-topbar">
+    <div class="atlas-topbar__identity">
+      <div class="atlas-brand" aria-label="OpenSphere">
+        <span class="atlas-brand__mark" aria-hidden="true"><i></i><i></i></span>
+        <span>OpenSphere</span>
       </div>
-      <label class="upload-button">
+      <span class="atlas-topbar__divider" aria-hidden="true"></span>
+      <div class="atlas-topbar__context"><span>{{ sectionTitle }}</span><small>专业工作台</small></div>
+    </div>
+
+    <div class="atlas-topbar__actions">
+      <label class="atlas-import-button">
         <el-icon><FolderOpened /></el-icon><span>导入</span>
-        <input
-          type="file"
-          accept=".geojson,.json,.csv,.kml,.kmz,.gpx,.zip"
-          multiple
-          @change="ctx.handleFiles(($event.target as HTMLInputElement).files)"
-        />
+        <input type="file" accept=".geojson,.json,.csv,.kml,.kmz,.gpx,.zip" multiple @change="importFiles" />
       </label>
-      <el-button
-        size="small"
-        :type="ctx.activeTool.value === 'layers' ? 'primary' : 'default'"
-        :icon="Collection"
-        @click="ctx.toggleTool('layers')"
-      >图层</el-button>
-      <el-button
-        size="small"
-        :type="ctx.activeTool.value === 'drawing' ? 'primary' : 'default'"
-        :icon="EditPen"
-        @click="ctx.toggleTool('drawing')"
-      >绘制</el-button>
-      <el-button
-        size="small"
-        :type="ctx.activeTool.value === 'timeline' ? 'primary' : 'default'"
-        :icon="Timer"
-        @click="ctx.toggleTool('timeline')"
-      >时间轴</el-button>
-      <el-dropdown trigger="click" class="more-dropdown">
-        <el-button size="small" :icon="MoreFilled"><span class="more-label">更多</span></el-button>
+      <el-dropdown trigger="click">
+        <el-button size="small" :icon="MoreFilled"><span class="atlas-more-label">工作区</span></el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item @click="ctx.toggleTool('query')">空间查询</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('visualization')">热力图与聚合</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('realtime')">实时轨迹</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('playback')">轨迹回放</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('coordinate')">坐标定位</el-dropdown-item>
-            <el-dropdown-item divided @click="ctx.toggleTool('vectorStyle')">基础样式</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('categoryStyle')">分类样式</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('legend')">图例</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('timeField')">时间字段</el-dropdown-item>
-            <el-dropdown-item @click="ctx.toggleTool('feature')">要素信息</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('content')">内容与图层</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('data')">数据目录</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('edit')">绘制与编辑</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('analysis')">空间分析</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('time')">时间轴</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('monitor')">实时监测</el-dropdown-item>
+            <el-dropdown-item divided @click="ctx.openTool('visualization')">点位展示与聚合</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('coordinate')">坐标定位</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('vectorStyle')">基础样式</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('categoryStyle')">分类样式</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('legend')">图例</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('timeField')">时间字段</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('feature')">要素信息</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openTool('playback')">轨迹回放</el-dropdown-item>
             <el-dropdown-item divided @click="ctx.showWmsDialog.value = true">添加 WMS 图层</el-dropdown-item>
             <el-dropdown-item @click="ctx.saveWorkspaceNow()">保存当前工作区</el-dropdown-item>
             <el-dropdown-item @click="ctx.restoreWorkspaceState()">恢复已保存工作区</el-dropdown-item>
-            <el-dropdown-item divided @click="ctx.clearWorkspaceState()">
-              <el-icon><Delete /></el-icon>清空工作区
-            </el-dropdown-item>
+            <el-dropdown-item divided @click="ctx.clearWorkspaceState()"><el-icon><Delete /></el-icon>清空工作区</el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
     </div>
-    <div class="toolbar-right">
+
+    <div class="atlas-topbar__map-actions">
       <SearchPanel
         variant="toolbar"
         :results="ctx.searchResults.value"
@@ -89,15 +83,13 @@ function onBaseMapChange(id: string) {
         @clear="ctx.clearSearch"
       />
       <el-tooltip content="坐标定位" placement="bottom">
-        <el-button size="small" :icon="Location" class="icon-only-btn" @click="ctx.toggleTool('coordinate')">
-          <span class="btn-text">定位</span>
-        </el-button>
+        <el-button size="small" :icon="Location" class="atlas-icon-button" aria-label="坐标定位" @click="ctx.openTool('coordinate')" />
       </el-tooltip>
-      <el-button-group class="engine-switch">
+      <el-button-group class="atlas-engine-switch">
         <el-button size="small" :type="mapStore.mapEngine === '2d' ? 'primary' : 'default'" @click="mapStore.setMapEngine('2d')">2D</el-button>
         <el-button size="small" :type="mapStore.mapEngine === '3d' ? 'primary' : 'default'" @click="mapStore.setMapEngine('3d')">3D</el-button>
       </el-button-group>
-      <el-select class="basemap-select" size="small" :model-value="mapStore.activeBaseMapId" @update:model-value="onBaseMapChange">
+      <el-select class="atlas-basemap-select" size="small" :model-value="mapStore.activeBaseMapId" @update:model-value="onBaseMapChange">
         <el-option v-for="item in mapStore.baseMaps" :key="item.id" :label="item.name" :value="item.id" />
       </el-select>
     </div>
@@ -105,154 +97,25 @@ function onBaseMapChange(id: string) {
 </template>
 
 <style scoped>
-.topbar {
-  position: relative;
-  z-index: 20;
-  height: 48px;
-  flex: 0 0 48px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 8px;
-  border-bottom: 1px solid #3b4047;
-  background: #20252b;
-  overflow: visible;
-}
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  flex-wrap: nowrap;
-  min-width: 0;
-  gap: 6px;
-}
-.toolbar-left { flex: 0 1 auto; }
-.toolbar-right { justify-content: flex-end; }
-.toolbar-right .search-panel-toolbar { flex: 1 1 360px; }
-.brand {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  gap: 6px;
-  padding-right: 7px;
-  color: #f2f6fa;
-  font-size: 15px;
-  font-weight: 700;
-}
-.brand-mark { font-size: 21px; }
-.toolbar-left .icon-only-btn .btn-text,
-.toolbar-right .icon-only-btn .btn-text { display: inline; }
-@media (max-width: 1100px) {
-  .toolbar-left .icon-only-btn .btn-text,
-  .toolbar-right .icon-only-btn .btn-text { display: none; }
-  .toolbar-left .icon-only-btn,
-  .toolbar-right .icon-only-btn { padding: 0 8px; min-width: 36px; }
-  .more-dropdown :deep(.el-button) { padding: 0 10px; }
-}
-@media (max-width: 800px) {
-  .topbar { gap: 8px; padding: 0 6px; }
-  .brand span:last-child { display: none; }
-  .upload-button span { display: none; }
-  .more-label { display: none; }
-  :deep(.el-button--primary) .btn-text,
-  :deep(.el-button--default) .btn-text { display: none; }
-  :deep(.el-button--primary),
-  :deep(.el-button--default) { min-width: 36px; padding: 0 10px; }
-  .basemap-select { width: 100px; }
-}
-@media (max-width: 680px) {
-  .topbar { gap: 6px; }
-  .toolbar-left, .toolbar-right { gap: 4px; }
-  .toolbar-right { flex: 1 1 auto; }
-  .toolbar-right .search-panel-toolbar { min-width: 0; width: auto; }
-  .basemap-select { min-width: 86px; width: 86px; }
-}
-@media (max-width: 520px) {
-  .toolbar-right .icon-only-btn { min-width: 34px; padding: 0 7px; }
-  .engine-switch :deep(.el-button) {
-    flex: 0 0 auto;
-    white-space: nowrap;
-    min-width: 32px !important;
-    padding: 0 7px;
-  }
-  .basemap-select { min-width: 72px; width: 72px; }
-}
-.upload-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  height: 24px;
-  padding: 0 9px;
-  color: #f4fff9;
-  border: 1px solid #369a20;
-  border-radius: 3px;
-  background: #238c14;
-  font-size: 12px;
-  line-height: 26px;
-  cursor: pointer;
-}
-.upload-button input { display: none; }
-.topbar :deep(.el-button) {
-  height: 28px;
-  margin: 0;
-  border-color: #4a525c;
-  border-radius: 3px;
-  color: #ecf3fb;
-  background: #30363e;
-}
-.topbar :deep(.el-button:hover) {
-  color: #fff;
-  border-color: #4e9bd0;
-  background: #3b5366;
-}
-.topbar :deep(.el-button--primary) {
-  border-color: #158bd0;
-  background: #087dbd;
-}
-.engine-switch { flex: 0 0 auto; white-space: nowrap; }
-.engine-switch :deep(.el-button) { flex: 0 0 auto; white-space: nowrap; }
-.topbar :deep(.el-button-group .el-button) { min-width: 35px; }
-.topbar :deep(.el-select__wrapper) {
-  min-height: 28px;
-  border-radius: 3px;
-  background: #30363e;
-  box-shadow: 0 0 0 1px #4a525c inset;
-}
-.basemap-select { width: 132px; min-width: 100px; flex-shrink: 0; }
-.search-panel-toolbar {
-  position: relative;
-  width: min(360px, 29vw);
-  min-width: 180px;
-  flex-shrink: 1;
-}
-.search-panel-toolbar :deep(.el-input) { margin: 0; }
-.search-panel-toolbar :deep(.el-input__wrapper) {
-  border-radius: 3px;
-  background: #30363e;
-  box-shadow: 0 0 0 1px #4a525c inset;
-}
-.search-panel-toolbar :deep(.search-results),
-.search-panel-toolbar :deep(.search-state) {
-  position: absolute;
-  z-index: 10;
-  top: 34px;
-  right: 0;
-  width: min(360px, 46vw);
-  margin: 0;
-  padding: 7px 10px;
-  border: 1px solid #46515c;
-  border-radius: 3px;
-  background: #242a30;
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.42);
-}
-.search-panel-toolbar :deep(.search-results) {
-  max-height: 320px;
-  overflow: auto;
-  padding-top: 0;
-}
-.search-panel-toolbar :deep(.search-state) {
-  color: #b7c2cc;
-  font-size: 11px;
-}
+.atlas-topbar { position: relative; z-index: var(--os-z-popover); height: 52px; flex: 0 0 52px; display: grid; grid-template-columns: minmax(230px, auto) auto minmax(260px, 1fr); align-items: center; gap: var(--os-space-3); padding: 0 var(--os-space-3); border-bottom: 1px solid var(--os-border-subtle); background: var(--os-bg-shell); }
+.atlas-topbar__identity, .atlas-topbar__actions, .atlas-topbar__map-actions { min-width: 0; display: flex; align-items: center; gap: var(--os-space-2); }
+.atlas-topbar__map-actions { justify-content: flex-end; }
+.atlas-brand { display: inline-flex; align-items: center; gap: 8px; color: var(--os-text-primary); font-size: 15px; font-weight: 700; letter-spacing: .01em; }
+.atlas-brand__mark { position: relative; width: 20px; height: 20px; display: inline-block; border: 2px solid var(--os-accent-strong); border-radius: 50%; }
+.atlas-brand__mark i { position: absolute; top: 3px; bottom: 3px; width: 2px; border-radius: 2px; background: var(--os-accent-strong); transform: rotate(38deg); }
+.atlas-brand__mark i:first-child { left: 6px; }.atlas-brand__mark i:last-child { right: 6px; transform: rotate(-38deg); }
+.atlas-topbar__divider { width: 1px; height: 22px; background: var(--os-border-subtle); }
+.atlas-topbar__context { display: flex; flex-direction: column; gap: 1px; color: var(--os-text-secondary); font-size: 12px; line-height: 1.1; }
+.atlas-topbar__context small { color: var(--os-text-muted); font-size: 10px; }
+.atlas-import-button { min-height: var(--os-compact-control-height); display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #2d8a63; border-radius: 4px; color: #e9fff5; background: #19734e; font-size: 12px; cursor: pointer; }
+.atlas-import-button:hover { border-color: #49bd8a; background: #1e8059; }
+.atlas-import-button input { display: none; }
+.atlas-topbar__map-actions :deep(.search-panel-toolbar) { position: relative; width: min(340px, 28vw); min-width: 160px; }
+.atlas-topbar__map-actions :deep(.search-results), .atlas-topbar__map-actions :deep(.search-state) { position: absolute; z-index: var(--os-z-popover); top: 34px; right: 0; width: min(380px, 48vw); }
+.atlas-icon-button { width: var(--os-compact-control-height); padding-inline: 0; }
+.atlas-engine-switch { flex: 0 0 auto; white-space: nowrap; }
+.atlas-basemap-select { width: 132px; flex: 0 0 132px; }
+@media (max-width: 1100px) { .atlas-topbar { grid-template-columns: auto auto minmax(180px, 1fr); } .atlas-topbar__context small, .atlas-more-label { display: none; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: min(250px, 25vw); } }
+@media (max-width: 800px) { .atlas-topbar { gap: 6px; padding-inline: 8px; } .atlas-brand span:last-child, .atlas-topbar__divider, .atlas-topbar__context { display: none; } .atlas-import-button span { display: none; } .atlas-import-button { width: var(--os-compact-control-height); justify-content: center; padding: 0; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: min(220px, 30vw); min-width: 100px; } .atlas-basemap-select { width: 104px; flex-basis: 104px; } }
+@media (max-width: 620px) { .atlas-topbar { grid-template-columns: auto auto 1fr; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: auto; min-width: 0; flex: 1; } .atlas-basemap-select { display: none; } .atlas-engine-switch :deep(.el-button) { min-width: 30px; padding-inline: 6px; } }
 </style>
