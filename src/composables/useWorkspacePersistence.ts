@@ -1,6 +1,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, toRaw, watch, type Ref } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
-import type { BaseMapOption, LayerRecord } from "@/types/gis";
+import { isWorkspacePersistableLayer, type BaseMapOption, type LayerRecord } from "@/types/gis";
 import type { MapViewState } from "@/types/workspace";
 import { clearWorkspace, createSnapshot, loadWorkspace, restoreLayers, saveWorkspace } from "@/workspace";
 import type { useMapStore } from "@/stores/map";
@@ -35,7 +35,7 @@ export function useWorkspacePersistence(options: WorkspacePersistenceOptions) {
     timeRange: options.mapStore.timeRange,
     query: options.mapStore.query,
     layers: options.mapStore.layers
-      .filter((layer) => !layer.realtime && !layer.demo)
+      .filter((layer) => isWorkspacePersistableLayer(toRaw(layer) as unknown as LayerRecord))
       .map((layer) => ({
         id: layer.id,
         visible: layer.visible,

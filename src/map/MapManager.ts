@@ -1,4 +1,5 @@
 import Map from 'ol/Map';
+import GeoJSON from 'ol/format/GeoJSON';
 import View from 'ol/View';
 import Group from 'ol/layer/Group';
 import TileLayer from 'ol/layer/Tile';
@@ -31,9 +32,12 @@ import {createPointVisualization, getClusterPointFeatures, getPointFeatures} fro
 import type {PlaybackPosition, PlaybackTrack} from '@/map/trackPlayback';
 import type {DrawMode} from '@/map/drawing';
 import type {MapViewState} from '@/types/workspace';
+import type {IncidentCaptureMode} from '@/incidents/presentation/incidentGeometryCaptureTask';
+import type {IncidentGeometryCaptureProgress, IncidentGeometryCaptureRequest} from '@/map/facade/types';
 
 const TDT_MIN_ZOOM = 1;
 const TDT_MAX_ZOOM = 18;
+const geoJson = new GeoJSON();
 
 function isTianDiTuBaseMap(baseMap: BaseMapOption) {
   return baseMap.layers.some((layer) => /tianditu\.gov\.cn\/.*\/wmts\?SERVICE=WMTS/i.test(layer.url));
@@ -68,6 +72,13 @@ export class MapManager {
   private measureElement?: HTMLElement;
   private measurePointerKey?: EventsKey;
   private userInteractHandler?: () => void;
+  private geometryCaptureDraw?: Draw;
+  private geometryCaptureLayer?: VectorLayer<VectorSource>;
+  private geometryCaptureReferenceFeature?: Feature<Geometry>;
+  private geometryCaptureRequest?: IncidentGeometryCaptureRequest;
+  private geometryCaptureMode?: IncidentCaptureMode;
+  private geometryCaptureVertexCount = 0;
+  private geometryCaptureListener?: EventsKey;
 
   constructor(target: HTMLElement, baseMap: BaseMapOption, onFeatureSelected: (feature?: SelectedFeatureInfo, pixel?: number[]) => void, onMeasurementChange: (value?: string) => void, onDrawingChange: () => void) {
     this.baseLayer = this.createBaseLayer(baseMap);
@@ -216,6 +227,7 @@ export class MapManager {
   }
 
   startSpatialQuery(onExtent: (extent: [number, number, number, number]) => void) {
+    this.cancelIncidentGeometryCapture();
     this.clearSpatialQuery();
     this.spatialQueryBox = new DragBox({condition: shiftKeyOnly});
     this.map.addInteraction(this.spatialQueryBox);
@@ -227,6 +239,158 @@ export class MapManager {
   }
 
   stopSpatialQuery() { this.clearSpatialQuery(); }
+
+  /** Starts a temporary event-position task without writing a GIS/business layer. */
+  startIncidentGeometryCapture(request: IncidentGeometryCaptureRequest): void {
+    this.cancelIncidentGeometryCapture();
+    this.clearSpatialQuery();
+    this.clearDrawingInteractions();
+
+    const source = new VectorSource();
+    const referenceStyle = new Style({
+      image: new CircleStyle({ radius: 7, fill: new Fill({ color: 'rgba(203, 213, 225, 0.16)' }), stroke: new Stroke({ color: '#cbd5e1', width: 2, lineDash: [4, 4] }) }),
+      stroke: new Stroke({ color: '#cbd5e1', width: 2, lineDash: [6, 4] }),
+      fill: new Fill({ color: 'rgba(203, 213, 225, 0.12)' }),
+    });
+    const layer = new VectorLayer({
+      source,
+      style: (feature) => feature.get('incidentCaptureReference') ? referenceStyle : undefined,
+      properties: { id: 'incident-geometry-capture', sourceType: 'geometry-capture' },
+    });
+
+    this.geometryCaptureLayer = layer;
+    this.geometryCaptureRequest = request;
+    this.geometryCaptureMode = request.mode;
+    this.select.setActive(false);
+    this.modify?.setActive(false);
+    this.map.addLayer(layer);
+
+    if (request.referenceGeometry) {
+      const referenceGeometry = geoJson.readGeometry(request.referenceGeometry, {
+        dataProjection: 'EPSG:4326',
+        featureProjection: 'EPSG:3857',
+      });
+      this.geometryCaptureReferenceFeature = new Feature<Geometry>({ geometry: referenceGeometry });
+      this.geometryCaptureReferenceFeature.set('incidentCaptureReference', true);
+      source.addFeature(this.geometryCaptureReferenceFeature);
+    }
+
+    this.startGeometryCaptureDraw();
+  }
+
+  setIncidentGeometryCaptureMode(mode: IncidentCaptureMode): void {
+    if (!this.geometryCaptureRequest || !this.geometryCaptureLayer) return;
+    this.geometryCaptureMode = mode;
+    this.startGeometryCaptureDraw();
+  }
+
+  undoIncidentGeometryCapture(): void {
+    if (this.geometryCaptureMode !== 'Polygon') return;
+    this.geometryCaptureDraw?.removeLastPoint();
+    this.geometryCaptureVertexCount = Math.max(0, this.geometryCaptureVertexCount - 1);
+    this.reportGeometryCaptureProgress();
+  }
+
+  finishIncidentGeometryCapture(): void {
+    if (!this.getGeometryCaptureProgress().canFinish) return;
+    this.geometryCaptureDraw?.finishDrawing();
+  }
+
+  cancelIncidentGeometryCapture(): void {
+    const request = this.geometryCaptureRequest;
+    if (!request && !this.geometryCaptureDraw && !this.geometryCaptureLayer) return;
+    this.clearGeometryCaptureSession();
+    if (request) request.onCancel();
+  }
+
+  private startGeometryCaptureDraw(): void {
+    const source = this.geometryCaptureLayer?.getSource();
+    const mode = this.geometryCaptureMode;
+    if (!source || !this.geometryCaptureRequest || !mode) return;
+
+    this.clearGeometryCaptureDraw();
+    const draw = new Draw({ source, type: mode, stopClick: true });
+    this.geometryCaptureDraw = draw;
+    this.map.addInteraction(draw);
+    draw.on('drawstart', (event) => {
+      const geometry = event.feature.getGeometry();
+      if (geometry && mode === 'Polygon') {
+        this.geometryCaptureListener = geometry.on('change', () => {
+          this.geometryCaptureVertexCount = this.getGeometryCaptureVertexCount(geometry);
+          this.reportGeometryCaptureProgress();
+        });
+      }
+      this.reportGeometryCaptureProgress();
+    });
+    draw.on('drawend', (event) => {
+      if (this.geometryCaptureListener) unByKey(this.geometryCaptureListener);
+      this.geometryCaptureListener = undefined;
+      const geometry = event.feature.getGeometry();
+      this.geometryCaptureVertexCount = this.getGeometryCaptureVertexCount(geometry);
+      if (mode === 'Polygon' && this.geometryCaptureVertexCount < 3) {
+        source.removeFeature(event.feature);
+        this.startGeometryCaptureDraw();
+        return;
+      }
+      const captured = geometry
+        ? geoJson.writeGeometryObject(geometry, { dataProjection: 'EPSG:4326', featureProjection: 'EPSG:3857' }) as GeoJSON.Geometry
+        : undefined;
+      if (captured) this.completeIncidentGeometryCapture(captured);
+      else this.cancelIncidentGeometryCapture();
+    });
+    this.reportGeometryCaptureProgress();
+  }
+
+  private clearGeometryCaptureDraw(): void {
+    if (this.geometryCaptureListener) unByKey(this.geometryCaptureListener);
+    this.geometryCaptureListener = undefined;
+    if (this.geometryCaptureDraw) this.map.removeInteraction(this.geometryCaptureDraw);
+    this.geometryCaptureDraw = undefined;
+    this.geometryCaptureVertexCount = 0;
+    const source = this.geometryCaptureLayer?.getSource();
+    source?.getFeatures()
+      .filter((feature) => feature !== this.geometryCaptureReferenceFeature)
+      .forEach((feature) => source.removeFeature(feature));
+  }
+
+  private getGeometryCaptureVertexCount(geometry?: Geometry): number {
+    if (!geometry || geometry.getType() !== 'Polygon') return geometry?.getType() === 'Point' ? 1 : 0;
+    const coordinates = (geometry as Polygon).getCoordinates()[0] ?? [];
+    return Math.max(0, coordinates.length - 1);
+  }
+
+  private getGeometryCaptureProgress(): IncidentGeometryCaptureProgress {
+    const mode = this.geometryCaptureMode ?? 'Point';
+    const vertexCount = mode === 'Polygon' ? this.geometryCaptureVertexCount : 0;
+    return {
+      mode,
+      vertexCount,
+      canUndo: mode === 'Polygon' && vertexCount > 0,
+      canFinish: mode === 'Polygon' && vertexCount >= 3,
+    };
+  }
+
+  private reportGeometryCaptureProgress(): void {
+    this.geometryCaptureRequest?.onProgress(this.getGeometryCaptureProgress());
+  }
+
+  private completeIncidentGeometryCapture(geometry: GeoJSON.Geometry): void {
+    const request = this.geometryCaptureRequest;
+    this.clearGeometryCaptureSession();
+    request?.onComplete(geometry);
+  }
+
+  private clearGeometryCaptureSession(): void {
+    this.clearGeometryCaptureDraw();
+    if (this.geometryCaptureLayer) this.map.removeLayer(this.geometryCaptureLayer);
+    this.geometryCaptureLayer = undefined;
+    this.geometryCaptureReferenceFeature = undefined;
+    this.geometryCaptureRequest = undefined;
+    this.geometryCaptureMode = undefined;
+    this.select.setActive(true);
+    this.modify?.setActive(true);
+  }
+
 
   private clearDrawingInteractions() {
     if (this.geometryListener) unByKey(this.geometryListener);
@@ -255,6 +419,7 @@ export class MapManager {
   }
 
   setDrawMode(mode?: DrawMode, record?: LayerRecord) {
+    this.cancelIncidentGeometryCapture();
     this.clearDrawingInteractions();
     if (!mode) return;
     if (mode === 'measureLine' || mode === 'measureArea') {
@@ -477,7 +642,7 @@ export class MapManager {
 
   getViewState(): MapViewState { const view = this.map.getView(); const center = toLonLat(view.getCenter() ?? fromLonLat([113.6254, 34.7466])); return {center: [Number(center[0].toFixed(6)), Number(center[1].toFixed(6))], zoom: view.getZoom() ?? 5, rotation: view.getRotation()}; }
   setViewState(state: MapViewState) { const view = this.map.getView(); view.setCenter(fromLonLat(state.center)); view.setZoom(state.zoom); view.setRotation(state.rotation); }
-  clearDataLayers() { this.clearDrawingInteractions(); this.clearPointVisualization(); this.clearTrackPlayback(); this.clearCoordinateLocation(); this.map.getLayers().getArray().filter((layer) => layer.get('id') !== 'base-map').forEach((layer) => this.map.removeLayer(layer)); }
+  clearDataLayers() { this.cancelIncidentGeometryCapture(); this.clearDrawingInteractions(); this.clearPointVisualization(); this.clearTrackPlayback(); this.clearCoordinateLocation(); this.map.getLayers().getArray().filter((layer) => layer.get('id') !== 'base-map').forEach((layer) => this.map.removeLayer(layer)); }
   focusFeature(record: LayerRecord, featureId: string) {
     const source = this.getVectorSource(record);
     const feature = source?.getFeatureById(featureId);
@@ -485,7 +650,7 @@ export class MapManager {
     if (geometry) this.map.getView().fit(geometry.getExtent(), {padding: [72, 72, 72, 340], maxZoom: 17, duration: 350});
   }
   removeLayerById(id: string) { if (this.visualizedRecord?.id === id) this.clearPointVisualization(); if (this.playbackSourceLayerId === id) this.clearTrackPlayback(); const layer = this.map.getLayers().getArray().find((item) => item.get('id') === id); if (layer) this.map.removeLayer(layer); }
-  dispose() { this.clearDrawingInteractions(); this.clearSpatialQuery(); this.clearPointVisualization(); this.clearTrackPlayback(); this.clearCoordinateLocation(); this.map.setTarget(undefined); }
+  dispose() { this.cancelIncidentGeometryCapture(); this.clearDrawingInteractions(); this.clearSpatialQuery(); this.clearPointVisualization(); this.clearTrackPlayback(); this.clearCoordinateLocation(); this.map.setTarget(undefined); }
 }
 
 

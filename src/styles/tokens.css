@@ -60,11 +60,6 @@
 html, body, #app { min-width: 0; min-height: 100%; }
 body { color: var(--os-text-primary); background: var(--os-bg-canvas); }
 button, input, select, textarea { font: inherit; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, [tabindex]:focus-visible {
-  outline: 2px solid var(--os-accent-strong);
-  outline-offset: 2px;
-}
-
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 999px; background: #405267; background-clip: padding-box; }

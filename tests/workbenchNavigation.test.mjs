@@ -15,6 +15,7 @@ test('defaults professional GIS workspace sections to their primary tools', () =
   assert.deepEqual(workbenchSections.map((section) => section.id), [
     'content',
     'data',
+    'incidents',
     'edit',
     'analysis',
     'time',
@@ -22,6 +23,7 @@ test('defaults professional GIS workspace sections to their primary tools', () =
   ]);
   assert.equal(getDefaultTool('content'), 'layers');
   assert.equal(getDefaultTool('data'), 'layers');
+  assert.equal(getDefaultTool('incidents'), 'incidents');
   assert.equal(getDefaultTool('edit'), 'drawing');
   assert.equal(getDefaultTool('analysis'), 'query');
   assert.equal(getDefaultTool('time'), 'timeline');
@@ -45,6 +47,7 @@ test('routes every existing tool to one semantic section and visual host', () =>
     timeline: 'time',
     playback: 'time',
     realtime: 'monitor',
+    incidents: 'incidents',
   };
 
   assert.deepEqual(Object.keys(expectedSections).sort(), [...toolIds].sort());
@@ -64,4 +67,12 @@ test('routes temporal tools to one bottom drawer tab only', () => {
   assert.equal(getBottomDrawerTabForTool('playback'), 'playback');
   assert.equal(getBottomDrawerTabForTool('realtime'), 'realtime');
   assert.equal(getBottomDrawerTabForTool('query'), undefined);
+});
+
+test('routes incidents to its dedicated content workspace', () => {
+  assert.equal(getDefaultTool('incidents'), 'incidents');
+  assert.equal(getSectionForTool('incidents'), 'incidents');
+  assert.equal(getToolHost('incidents'), 'content');
+  assert.equal(getBottomDrawerTabForTool('incidents'), undefined);
+  assert.equal(getBottomDrawerTabForTool('timeline'), 'timeline');
 });

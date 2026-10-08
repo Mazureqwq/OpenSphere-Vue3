@@ -2,6 +2,7 @@ import GeoJSON from 'ol/format/GeoJSON';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
 import type BaseLayer from 'ol/layer/Base';
+import {isWorkspacePersistableLayer} from '@/types/gis';
 import type {VectorStyleConfig} from '@/types/gis';
 import {applyCategoryStyle, createVectorStyle, defaultVectorStyle} from '@/map/styles';
 import {createWmsLayer} from '@/map/ogc';
@@ -58,7 +59,7 @@ export function createSnapshot(input: {
 }
 
 function serializeLayer(layer: LayerRecord): Array<WorkspaceVectorLayer | WorkspaceWmsLayer> {
-  if (layer.realtime || layer.demo) return [];
+  if (!isWorkspacePersistableLayer(layer)) return [];
   if (layer.kind === 'vector' && layer.vectorStyle) {
     const source = (layer.source as SourceLayer).getSource?.();
     if (!source) return [];

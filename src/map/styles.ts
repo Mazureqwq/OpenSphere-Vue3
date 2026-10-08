@@ -6,6 +6,7 @@ import {intersects} from 'ol/extent';
 import type BaseLayer from 'ol/layer/Base';
 import type VectorSource from 'ol/source/Vector';
 import type {CategoryStyleRule, FeatureQueryConfig, LineDash, TimeFilterConfig, TimeRange, VectorStyleConfig} from '@/types/gis';
+import {withOpacity} from './styleColor.ts';
 
 export const defaultVectorStyle: VectorStyleConfig = {
   pointColor: '#14b8a6', pointRadius: 5, strokeColor: '#2dd4bf', strokeWidth: 2,
@@ -13,16 +14,6 @@ export const defaultVectorStyle: VectorStyleConfig = {
 };
 
 const dashPatterns: Record<LineDash, number[] | undefined> = {solid: undefined, dashed: [8, 6], dotted: [2, 6]};
-
-function withOpacity(color: string, opacity: number) {
-  const normalized = color.replace('#', '');
-  const hex = normalized.length === 3 ? normalized.split('').map((value) => value + value).join('') : normalized;
-  if (!/^[0-9a-f]{6}$/i.test(hex)) return color;
-  const red = Number.parseInt(hex.slice(0, 2), 16);
-  const green = Number.parseInt(hex.slice(2, 4), 16);
-  const blue = Number.parseInt(hex.slice(4, 6), 16);
-  return `rgba(${red}, ${green}, ${blue}, ${opacity})`;
-}
 
 export function createVectorStyle(config: VectorStyleConfig, colorOverride?: string) {
   const color = colorOverride ?? config.fillColor;

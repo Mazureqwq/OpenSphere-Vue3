@@ -2,15 +2,23 @@
 import { computed } from 'vue';
 import { Delete, FolderOpened, Location, MoreFilled } from '@element-plus/icons-vue';
 import SearchPanel from '@/components/SearchPanel.vue';
+import DemoRoleSwitch from '@/incidents/components/DemoRoleSwitch.vue';
 import { useMapStore } from '@/stores/map';
 import { useWorkspaceContext } from '@/tools/workspaceContext';
+import { canIncidentAction } from '@/incidents/domain/permissions';
+import { useIncidentWorkspaceContext } from '@/incidents/presentation/incidentContext';
+import { useIncidentUiState } from '@/incidents/presentation/incidentUiState';
 
 const mapStore = useMapStore();
 const ctx = useWorkspaceContext();
+const incidentWorkspace = useIncidentWorkspaceContext();
+const { openCreateDialog } = useIncidentUiState();
+const canCreateIncident = computed(() => canIncidentAction(incidentWorkspace.currentRole.value, 'create'));
 
 const sectionTitle = computed(() => ({
   content: '内容',
   data: '数据',
+  incidents: '事件',
   edit: '编辑',
   analysis: '分析',
   time: '时间',
@@ -27,6 +35,11 @@ function importFiles(event: Event) {
   void ctx.handleFiles(input.files);
   input.value = '';
 }
+
+function createIncident() {
+  ctx.openSection('incidents');
+  openCreateDialog();
+}
 </script>
 
 <template>
@@ -41,6 +54,8 @@ function importFiles(event: Event) {
     </div>
 
     <div class="atlas-topbar__actions">
+      <DemoRoleSwitch />
+      <el-button v-if="canCreateIncident" size="small" type="primary" class="atlas-create-incident-button" @click="createIncident">新建事件</el-button>
       <label class="atlas-import-button">
         <el-icon><FolderOpened /></el-icon><span>导入</span>
         <input type="file" accept=".geojson,.json,.csv,.kml,.kmz,.gpx,.zip" multiple @change="importFiles" />
@@ -51,6 +66,7 @@ function importFiles(event: Event) {
           <el-dropdown-menu>
             <el-dropdown-item @click="ctx.openSection('content')">内容与图层</el-dropdown-item>
             <el-dropdown-item @click="ctx.openSection('data')">数据目录</el-dropdown-item>
+            <el-dropdown-item @click="ctx.openSection('incidents')">事件处置</el-dropdown-item>
             <el-dropdown-item @click="ctx.openSection('edit')">绘制与编辑</el-dropdown-item>
             <el-dropdown-item @click="ctx.openSection('analysis')">空间分析</el-dropdown-item>
             <el-dropdown-item @click="ctx.openSection('time')">时间轴</el-dropdown-item>
@@ -107,6 +123,7 @@ function importFiles(event: Event) {
 .atlas-topbar__divider { width: 1px; height: 22px; background: var(--os-border-subtle); }
 .atlas-topbar__context { display: flex; flex-direction: column; gap: 1px; color: var(--os-text-secondary); font-size: 12px; line-height: 1.1; }
 .atlas-topbar__context small { color: var(--os-text-muted); font-size: 10px; }
+.atlas-create-incident-button { flex: 0 0 auto; }
 .atlas-import-button { min-height: var(--os-compact-control-height); display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #2d8a63; border-radius: 4px; color: #e9fff5; background: #19734e; font-size: 12px; cursor: pointer; }
 .atlas-import-button:hover { border-color: #49bd8a; background: #1e8059; }
 .atlas-import-button input { display: none; }
@@ -116,6 +133,6 @@ function importFiles(event: Event) {
 .atlas-engine-switch { flex: 0 0 auto; white-space: nowrap; }
 .atlas-basemap-select { width: 132px; flex: 0 0 132px; }
 @media (max-width: 1100px) { .atlas-topbar { grid-template-columns: auto auto minmax(180px, 1fr); } .atlas-topbar__context small, .atlas-more-label { display: none; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: min(250px, 25vw); } }
-@media (max-width: 800px) { .atlas-topbar { gap: 6px; padding-inline: 8px; } .atlas-brand span:last-child, .atlas-topbar__divider, .atlas-topbar__context { display: none; } .atlas-import-button span { display: none; } .atlas-import-button { width: var(--os-compact-control-height); justify-content: center; padding: 0; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: min(220px, 30vw); min-width: 100px; } .atlas-basemap-select { width: 104px; flex-basis: 104px; } }
+@media (max-width: 800px) { .atlas-topbar { gap: 6px; padding-inline: 8px; } .atlas-brand span:last-child, .atlas-topbar__divider, .atlas-topbar__context { display: none; } .atlas-create-incident-button { padding-inline: 7px; } .atlas-import-button span { display: none; } .atlas-import-button { width: var(--os-compact-control-height); justify-content: center; padding: 0; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: min(220px, 30vw); min-width: 100px; } .atlas-basemap-select { width: 104px; flex-basis: 104px; } }
 @media (max-width: 620px) { .atlas-topbar { grid-template-columns: auto auto 1fr; } .atlas-topbar__map-actions :deep(.search-panel-toolbar) { width: auto; min-width: 0; flex: 1; } .atlas-basemap-select { display: none; } .atlas-engine-switch :deep(.el-button) { min-width: 30px; padding-inline: 6px; } }
 </style>

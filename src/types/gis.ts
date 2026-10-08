@@ -3,6 +3,7 @@ import type Layer from 'ol/layer/Layer';
 import type VectorSource from 'ol/source/Vector';
 
 export type LayerKind = 'base' | 'vector' | 'tile' | 'wms';
+export type SystemLayerKind = 'incidents';
 export type MapEngine = '2d' | '3d';
 export type LineDash = 'solid' | 'dashed' | 'dotted';
 export type QueryOperator = 'contains' | 'equals' | 'greaterThan' | 'lessThan';
@@ -29,6 +30,11 @@ export interface LayerRecord {
   drawing?: boolean;
   realtime?: boolean;
   demo?: boolean;
+  system?: SystemLayerKind;
+}
+
+export function isWorkspacePersistableLayer(layer: LayerRecord): boolean {
+  return !layer.system && !layer.realtime && !layer.demo;
 }
 
 export interface QueryResult { id: string; layerId: string; properties: Record<string, string>; }

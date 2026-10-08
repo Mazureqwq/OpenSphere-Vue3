@@ -37,10 +37,6 @@
 .el-button--small { min-height: var(--os-compact-control-height); }
 .el-input__wrapper, .el-select__wrapper, .el-textarea__inner {
   background: var(--os-bg-elevated);
-  box-shadow: 0 0 0 1px var(--os-border-subtle) inset !important;
-}
-.el-input__wrapper.is-focus, .el-select__wrapper.is-focused, .el-textarea__inner:focus {
-  box-shadow: 0 0 0 1px var(--os-accent) inset !important;
 }
 .el-dropdown__popper, .el-select__popper, .el-popper.is-light, .el-dialog {
   border-color: var(--os-border-strong);

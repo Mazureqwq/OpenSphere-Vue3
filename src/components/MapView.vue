@@ -8,10 +8,14 @@ import type {BaseMapOption, LayerRecord, PointVisualizationConfig, SelectedFeatu
 import type {MapViewState} from '@/types/workspace';
 import type {PlaybackPosition, PlaybackTrack} from '@/map/trackPlayback';
 import {useMapStore} from '@/stores/map';
-import type { MapFacade } from '@/map/facade';
+import { useSelectionStore } from '@/stores/selection';
+import { selectionInputForMapFeature } from '@/incidents/presentation/incidentSelection';
+import type { IncidentGeometryCaptureRequest, MapFacade } from '@/map/facade';
+import type { IncidentCaptureMode } from '@/incidents/presentation/incidentGeometryCaptureTask';
 
 const emit = defineEmits<{ready: [facade: MapFacade]; viewChange: [state: MapViewState]; pointerChange: [coordinate?: [number, number]]; measurementChange: [value?: string]; drawingChange: []}>();
 const mapStore = useMapStore();
+const selection = useSelectionStore();
 const target2d = ref<HTMLElement>();
 const target3d = ref<HTMLElement>();
 let manager: MapManager | undefined;
@@ -22,6 +26,13 @@ let playbackOverlay: {track: PlaybackTrack; position: PlaybackPosition; follow: 
 const editing = ref(false);
 const isEngineLoading = ref(false);
 let hasUnmounted = false;
+let geometryCaptureGeneration = 0;
+interface ActiveIncidentCapture {
+  generation: number;
+  mode: IncidentCaptureMode;
+  request: IncidentGeometryCaptureRequest;
+}
+let activeIncidentCapture: ActiveIncidentCapture | undefined;
 
 onMounted(async () => {
   if (!target2d.value) return;
@@ -34,7 +45,7 @@ onMounted(async () => {
   await switchEngine(mapStore.mapEngine);
   emit('ready', facade);
 });
-onBeforeUnmount(() => { hasUnmounted = true; cesiumManager?.destroy(); manager?.dispose(); });
+onBeforeUnmount(() => { hasUnmounted = true; cancelIncidentGeometryCapture(); cesiumManager?.destroy(); manager?.dispose(); });
 
 watch(() => mapStore.mapEngine, (engine) => { void switchEngine(engine); });
 watch(() => mapStore.layers, syncCesiumLayers, {deep: true});
@@ -45,6 +56,7 @@ async function switchEngine(engine: '2d' | '3d') {
   if (!manager) return;
   if (engine === '2d') {
     isEngineLoading.value = false;
+    cancelIncidentGeometryCapture();
     cesiumManager?.setDrawMode();
     cesiumManager?.stopSpatialQuery();
     const state = cesiumManager?.getViewState(manager.getViewState().rotation);
@@ -57,6 +69,7 @@ async function switchEngine(engine: '2d' | '3d') {
     return;
   }
   if (!target3d.value) return;
+  cancelIncidentGeometryCapture();
   const needsCesiumManager = !cesiumManager;
   if (needsCesiumManager) isEngineLoading.value = true;
   try {
@@ -110,7 +123,9 @@ function handleCesiumPointerMove(event: MouseEvent) {
   emit('pointerChange', cesiumManager?.getCoordinateFromScreen([event.clientX - rect.left, event.clientY - rect.top]));
 }
 function handleFeatureSelected(feature?: SelectedFeatureInfo) {
-  mapStore.setSelectedFeature(feature);
+  const input = selectionInputForMapFeature(feature);
+  if (input) selection.select(input);
+  else selection.clear();
 }
 function closeFeaturePopup() { mapStore.setSelectedFeature(); }
 function focusSelectedFeature() {
@@ -131,7 +146,81 @@ function deleteSelectedFeature() {
 function syncCesiumLayers() { cesiumManager?.syncLayers(mapStore.layers.map((layer) => toRaw(layer) as unknown as LayerRecord)); }
 function addLayer(layer: LayerRecord, zoomToLayer = false) { manager?.addLayer(layer); if (zoomToLayer) manager?.zoomToLayer(layer); syncCesiumLayers(); }
 function removeLayer(id: string) { manager?.removeLayerById(id); syncCesiumLayers(); }
-function clearLayers() { manager?.clearDataLayers(); realtimeLayer = undefined; playbackOverlay = undefined; cesiumManager?.clearRealtimeLayer(); cesiumManager?.clearTrackPlayback(); syncCesiumLayers(); }
+function clearLayers() { cancelIncidentGeometryCapture(); manager?.clearDataLayers(); realtimeLayer = undefined; playbackOverlay = undefined; cesiumManager?.clearRealtimeLayer(); cesiumManager?.clearTrackPlayback(); syncCesiumLayers(); }
+
+function isActiveIncidentCapture(capture: ActiveIncidentCapture): boolean {
+  return activeIncidentCapture === capture && capture.generation === geometryCaptureGeneration;
+}
+
+function settleIncidentCapture(capture: ActiveIncidentCapture, callback: () => void): void {
+  if (!isActiveIncidentCapture(capture)) return;
+  activeIncidentCapture = undefined;
+  callback();
+}
+
+function captureRequestFor(capture: ActiveIncidentCapture): IncidentGeometryCaptureRequest {
+  return {
+    mode: capture.mode,
+    referenceGeometry: capture.request.referenceGeometry,
+    onProgress: (progress) => {
+      if (isActiveIncidentCapture(capture)) capture.request.onProgress(progress);
+    },
+    onComplete: (geometry) => settleIncidentCapture(capture, () => capture.request.onComplete(geometry)),
+    onCancel: () => settleIncidentCapture(capture, () => capture.request.onCancel()),
+  };
+}
+
+function startIncidentGeometryCapture(request: IncidentGeometryCaptureRequest): void {
+  cancelIncidentGeometryCapture();
+  const generation = ++geometryCaptureGeneration;
+  const capture: ActiveIncidentCapture = { generation, mode: request.mode, request };
+  activeIncidentCapture = capture;
+
+  if (mapStore.mapEngine === '3d') {
+    void ensureCesiumManager().then((activeCesiumManager) => {
+      if (!activeCesiumManager || mapStore.mapEngine !== '3d' || generation !== geometryCaptureGeneration) {
+        if (isActiveIncidentCapture(capture)) cancelIncidentGeometryCapture();
+        return;
+      }
+      activeCesiumManager.startIncidentGeometryCapture(captureRequestFor(capture));
+    });
+    return;
+  }
+
+  if (!manager) {
+    cancelIncidentGeometryCapture();
+    return;
+  }
+  manager.startIncidentGeometryCapture(captureRequestFor(capture));
+}
+
+function setIncidentGeometryCaptureMode(mode: IncidentCaptureMode): void {
+  const capture = activeIncidentCapture;
+  if (!capture) return;
+  capture.mode = mode;
+  if (mapStore.mapEngine === '3d') cesiumManager?.setIncidentGeometryCaptureMode(mode);
+  else manager?.setIncidentGeometryCaptureMode(mode);
+}
+
+function undoIncidentGeometryCapture(): void {
+  if (mapStore.mapEngine === '3d') cesiumManager?.undoIncidentGeometryCapture();
+  else manager?.undoIncidentGeometryCapture();
+}
+
+function finishIncidentGeometryCapture(): void {
+  if (mapStore.mapEngine === '3d') cesiumManager?.finishIncidentGeometryCapture();
+  else manager?.finishIncidentGeometryCapture();
+}
+
+function cancelIncidentGeometryCapture(): void {
+  const capture = activeIncidentCapture;
+  activeIncidentCapture = undefined;
+  geometryCaptureGeneration += 1;
+  manager?.cancelIncidentGeometryCapture();
+  cesiumManager?.cancelIncidentGeometryCapture();
+  capture?.request.onCancel();
+}
+
 function setBaseMap(baseMap: BaseMapOption) { manager?.setBaseMap(baseMap); cesiumManager?.setBaseMap(baseMap); }
 function getViewState() { return manager?.getViewState(); }
 function setViewState(state: MapViewState) { manager?.setViewState(state); if (mapStore.mapEngine === '3d') cesiumManager?.setViewState(state); }
@@ -183,6 +272,11 @@ const facade: MapFacade = {
   addLayer,
   removeLayer,
   clearLayers,
+  startIncidentGeometryCapture,
+  setIncidentGeometryCaptureMode,
+  undoIncidentGeometryCapture,
+  finishIncidentGeometryCapture,
+  cancelIncidentGeometryCapture,
   setBaseMap,
   getViewState,
   setViewState,

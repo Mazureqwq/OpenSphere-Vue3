@@ -44,6 +44,7 @@ export function useWorkbenchLayout(options: WorkbenchLayoutOptions) {
     if (toolInspectorTool.value) return 'tool';
     const kind = options.selection.current.value?.kind;
     if (kind === 'feature') return 'feature';
+    if (kind === 'incident') return 'incident';
     if (kind === 'layer') return 'layer';
     return undefined;
   });

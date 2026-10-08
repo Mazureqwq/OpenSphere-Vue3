@@ -6,6 +6,7 @@ import { getToolHost } from './workbenchNavigation';
 import { useWorkspaceContext } from '@/tools/workspaceContext';
 import { useMapStore } from '@/stores/map';
 import WorkbenchToolHost from './WorkbenchToolHost.vue';
+import IncidentInspector from '@/incidents/components/IncidentInspector.vue';
 
 const ctx = useWorkspaceContext();
 const mapStore = useMapStore();
@@ -17,6 +18,7 @@ const inspectorTool = computed<ToolId | undefined>(() => {
   return ctx.inspectorTarget.value === 'tool' && active && getToolHost(active) === 'inspector' ? active : undefined;
 });
 const title = computed(() => {
+  if (ctx.inspectorTarget.value === 'incident') return '事件详情';
   if (inspectorTool.value) return toolTitles[inspectorTool.value];
   return ctx.inspectorTarget.value === 'layer' ? '图层详情' : '要素详情';
 });
@@ -38,7 +40,11 @@ function backToSelection() {
       <button type="button" aria-label="关闭详情面板" @click="ctx.closeInspector()">×</button>
     </header>
 
-    <div v-if="inspectorTool" class="inspector-panel__body">
+    <div v-if="ctx.inspectorTarget.value === 'incident'" class="inspector-panel__body">
+      <IncidentInspector />
+    </div>
+
+    <div v-else-if="inspectorTool" class="inspector-panel__body">
       <WorkbenchToolHost :tool="inspectorTool" />
     </div>
 

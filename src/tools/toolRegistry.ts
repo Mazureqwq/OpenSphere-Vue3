@@ -2,6 +2,7 @@ import type { Component } from 'vue';
 import type { ToolId } from '@/tools/types';
 import { toolTitles } from './toolMeta';
 import LayersTool from '@/tools/components/LayersTool.vue';
+import IncidentTool from '@/tools/components/IncidentTool.vue';
 import RealtimeTool from '@/tools/components/RealtimeTool.vue';
 import VisualizationTool from '@/tools/components/VisualizationTool.vue';
 import CoordinateTool from '@/tools/components/CoordinateTool.vue';
@@ -25,6 +26,7 @@ export { toolTitles };
 
 export const toolRegistry: Record<ToolId, ToolDefinition> = {
   layers: { id: 'layers', title: toolTitles.layers, component: LayersTool },
+  incidents: { id: 'incidents', title: toolTitles.incidents, component: IncidentTool },
   realtime: { id: 'realtime', title: toolTitles.realtime, component: RealtimeTool },
   visualization: { id: 'visualization', title: toolTitles.visualization, component: VisualizationTool },
   coordinate: { id: 'coordinate', title: toolTitles.coordinate, component: CoordinateTool },

@@ -5,8 +5,10 @@ import { toolTitles } from '@/tools/toolMeta';
 import { getBottomDrawerTabForTool, getToolHost, type BottomDrawerTab } from './workbenchNavigation';
 import { useWorkspaceContext } from '@/tools/workspaceContext';
 import WorkbenchToolHost from './WorkbenchToolHost.vue';
+import IncidentTimelineDrawer from '@/incidents/components/IncidentTimelineDrawer.vue';
 
 const ctx = useWorkspaceContext();
+const drawerTabs: BottomDrawerTab[] = ['timeline', 'playback', 'realtime', 'incidentTimeline'];
 const drawerToolByTab: Partial<Record<BottomDrawerTab, ToolId>> = {
   timeline: 'timeline',
   playback: 'playback',
@@ -17,15 +19,20 @@ const tool = computed<ToolId | undefined>(() => {
   if (active && getToolHost(active) === 'bottomDrawer' && getBottomDrawerTabForTool(active) === ctx.bottomDrawerTab.value) return active;
   return ctx.bottomDrawerTab.value ? drawerToolByTab[ctx.bottomDrawerTab.value] : undefined;
 });
-const title = computed(() => tool.value ? toolTitles[tool.value] : '结果');
+const title = computed(() => ctx.bottomDrawerTab.value === 'incidentTimeline' ? '事件记录' : tool.value ? toolTitles[tool.value] : '结果');
 
+function tabLabel(tab: BottomDrawerTab) {
+  return tab === 'timeline' ? '时间轴' : tab === 'playback' ? '回放' : tab === 'realtime' ? '实时' : '事件记录';
+}
 function selectDrawerTab(tab: BottomDrawerTab) {
+  if (tab === 'incidentTimeline') { ctx.openBottomDrawer(tab); return; }
   const nextTool = drawerToolByTab[tab];
   if (nextTool) ctx.openTool(nextTool);
   else ctx.openBottomDrawer(tab);
 }
 function closeDrawer() {
-  if (tool.value) ctx.closeActiveTool();
+  if (ctx.bottomDrawerTab.value === 'incidentTimeline') ctx.closeBottomDrawer();
+  else if (tool.value) ctx.closeActiveTool();
   else ctx.closeBottomDrawer();
 }
 </script>
@@ -35,14 +42,15 @@ function closeDrawer() {
     <header class="bottom-drawer__header">
       <div class="bottom-drawer__title"><span class="bottom-drawer__handle" aria-hidden="true"></span><strong>{{ title }}</strong></div>
       <nav class="bottom-drawer__tabs" aria-label="底部抽屉页签">
-        <button v-for="tab in ['timeline', 'playback', 'realtime'] as BottomDrawerTab[]" :key="tab" type="button" :class="{ 'is-active': ctx.bottomDrawerTab.value === tab }" @click="selectDrawerTab(tab)">
-          {{ tab === 'timeline' ? '时间轴' : tab === 'playback' ? '回放' : '实时' }}
+        <button v-for="tab in drawerTabs" :key="tab" type="button" :class="{ 'is-active': ctx.bottomDrawerTab.value === tab }" @click="selectDrawerTab(tab)">
+          {{ tabLabel(tab) }}
         </button>
       </nav>
       <button type="button" class="bottom-drawer__close" aria-label="关闭底部抽屉" @click="closeDrawer">×</button>
     </header>
     <div class="bottom-drawer__body">
-      <WorkbenchToolHost v-if="tool" :tool="tool" />
+      <IncidentTimelineDrawer v-if="ctx.bottomDrawerTab.value === 'incidentTimeline'" />
+      <WorkbenchToolHost v-else-if="tool" :tool="tool" />
       <p v-else class="os-muted">暂无查询结果</p>
     </div>
   </section>

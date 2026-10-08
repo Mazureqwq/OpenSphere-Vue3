@@ -7,6 +7,7 @@ const ctx = useWorkspaceContext();
 const sectionGlyphs: Record<WorkbenchSection, string> = {
   content: '▤',
   data: '◫',
+  incidents: '!',
   edit: '✎',
   analysis: '◇',
   time: '◷',

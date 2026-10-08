@@ -1,5 +1,6 @@
 export const toolIds = [
   'layers',
+  'incidents',
   'realtime',
   'visualization',
   'coordinate',
@@ -18,6 +19,7 @@ export type ToolId = (typeof toolIds)[number];
 
 export const toolTitles: Record<ToolId, string> = {
   layers: '图层',
+  incidents: '事件',
   realtime: '实时轨迹',
   visualization: '点位展示',
   coordinate: '坐标定位',

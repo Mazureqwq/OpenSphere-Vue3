@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, provide, ref, watch } from 'vue';
 import WmsLayerDialog from '@/components/WmsLayerDialog.vue';
 import AppTopbar from '@/layout/AppTopbar.vue';
 import TaskRail from '@/layout/TaskRail.vue';
@@ -11,36 +11,62 @@ import MapStatusBar from '@/layout/MapStatusBar.vue';
 import type { MapFacade } from '@/map/facade';
 import { mapFacadeKey } from '@/map/facade';
 import { useMapWorkspace } from '@/composables/useMapWorkspace';
+import { useSelectionStore } from '@/stores/selection';
 import { workspaceContextKey } from '@/tools/workspaceContext';
+import { incidentContextKey } from '@/incidents/presentation/incidentContext';
+import { useIncidentWorkspace } from '@/incidents/presentation/useIncidentWorkspace';
+import { useIncidentGeometryCaptureTask } from '@/incidents/presentation/useIncidentGeometryCaptureTask';
 
 const MapView = defineAsyncComponent(() => import('@/components/MapView.vue'));
 const mapFacade = ref<MapFacade>();
 const mapReady = ref(false);
 const { context, handleViewChange, handlePointerChange, handleMeasurementChange, handleDrawingChange } =
   useMapWorkspace(mapFacade);
+const incidentWorkspace = useIncidentWorkspace({ mapFacade });
+const incidentGeometryCaptureTask = useIncidentGeometryCaptureTask();
+const selection = useSelectionStore();
 
 provide(mapFacadeKey, mapFacade);
 provide(workspaceContextKey, context);
+provide(incidentContextKey, incidentWorkspace);
+
+watch(() => selection.current, (target) => {
+  incidentWorkspace.selectIncident(target?.kind === 'incident' ? target.incidentId : undefined);
+}, { immediate: true });
 
 const showWmsDialog = computed({
   get: () => context.showWmsDialog.value,
   set: (value: boolean) => { context.showWmsDialog.value = value; },
 });
 
-function onMapReady(facade: MapFacade) {
+async function onMapReady(facade: MapFacade) {
   mapFacade.value = facade;
   mapReady.value = true;
-  void context.loadDemoData();
+  await context.loadDemoData();
+  await incidentWorkspace.hydrate();
 }
 
 function onWindowKeydown(event: KeyboardEvent) {
+  if (incidentGeometryCaptureTask.active.value) {
+    if (event.key === 'Escape') {
+      incidentGeometryCaptureTask.cancel();
+      event.preventDefault();
+      return;
+    }
+    if (event.key === 'Enter' && incidentGeometryCaptureTask.state.value.mode === 'Polygon') {
+      incidentGeometryCaptureTask.finish();
+      event.preventDefault();
+      return;
+    }
+  }
   if (event.key !== 'Escape' || event.defaultPrevented) return;
   const target = event.target as HTMLElement | null;
   if (target?.closest('.el-overlay, .el-popper')) return;
   if (context.activeDrawingMode.value) {
     context.cancelCurrentDrawing();
   } else if (context.bottomDrawerTab.value) {
-    context.closeActiveTool();
+    if (context.bottomDrawerTab.value === 'incidentTimeline') context.closeBottomDrawer();
+    else context.closeActiveTool();
   } else if (context.inspectorTarget.value) {
     context.closeInspector();
   } else if (context.contentPanelOpen.value) {

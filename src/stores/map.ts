@@ -27,7 +27,7 @@ export const useMapStore = defineStore('map', () => {
   const timeCursor = ref(0.5);
   const query = ref<FeatureQueryConfig>();
   const activeBaseMap = computed(() => baseMaps.find((item) => item.id === activeBaseMapId.value) ?? baseMaps[0]);
-  const dataLayers = computed(() => layers.value.filter((layer) => layer.kind !== 'base'));
+  const dataLayers = computed(() => layers.value.filter((layer) => layer.kind !== 'base' && !layer.system));
   const timeBounds = computed<TimeRange | undefined>(() => {
     const bounds = layers.value.flatMap((layer) => {
       if (!layer.timeFilter) return [];
@@ -56,7 +56,7 @@ export const useMapStore = defineStore('map', () => {
     else applyVectorStyle(source, layer.vectorStyle, filter, range, layerQuery);
   }
 
-  function addLayer(layer: LayerRecord) { layers.value.push({...layer, source: markRaw(layer.source)}); selectedLayerId.value = layer.id; }
+  function addLayer(layer: LayerRecord, select = true) { layers.value.push({...layer, source: markRaw(layer.source)}); if (select) selectedLayerId.value = layer.id; }
   function replaceLayers(nextLayers: LayerRecord[]) { layers.value = nextLayers.map((layer) => ({...layer, source: markRaw(layer.source)})); }
   function clearLayers() { layers.value = []; selectedLayerId.value = undefined; selectedFeature.value = undefined; query.value = undefined; }
   function refreshFeatureCount(id: string) {

@@ -1,9 +1,9 @@
 import type { ToolId } from '../tools/toolMeta.ts';
 
-export type WorkbenchSection = 'content' | 'data' | 'edit' | 'analysis' | 'time' | 'monitor';
+export type WorkbenchSection = 'content' | 'data' | 'incidents' | 'edit' | 'analysis' | 'time' | 'monitor';
 export type ContentTab = 'layers' | 'data' | 'areas' | 'filters' | 'places';
-export type BottomDrawerTab = 'timeline' | 'playback' | 'realtime' | 'results';
-export type InspectorTarget = 'layer' | 'feature' | 'tool' | undefined;
+export type BottomDrawerTab = 'timeline' | 'playback' | 'realtime' | 'results' | 'incidentTimeline';
+export type InspectorTarget = 'layer' | 'feature' | 'incident' | 'tool' | undefined;
 export type WorkbenchToolHost = 'content' | 'inspector' | 'bottomDrawer';
 
 export interface WorkbenchSectionDefinition {
@@ -25,6 +25,7 @@ export interface WorkbenchSectionRoute {
 export const workbenchSections: readonly WorkbenchSectionDefinition[] = [
   { id: 'content', label: '内容', shortLabel: '内容', defaultTool: 'layers', contentTab: 'layers' },
   { id: 'data', label: '数据', shortLabel: '数据', defaultTool: 'layers', contentTab: 'data' },
+  { id: 'incidents', label: '事件', shortLabel: '事件', defaultTool: 'incidents' },
   { id: 'edit', label: '编辑', shortLabel: '编辑', defaultTool: 'drawing' },
   { id: 'analysis', label: '分析', shortLabel: '分析', defaultTool: 'query' },
   { id: 'time', label: '时间', shortLabel: '时间', defaultTool: 'timeline' },
@@ -33,6 +34,7 @@ export const workbenchSections: readonly WorkbenchSectionDefinition[] = [
 
 const sectionByTool = {
   layers: 'content',
+  incidents: 'incidents',
   legend: 'content',
   feature: 'content',
   drawing: 'edit',
@@ -49,6 +51,7 @@ const sectionByTool = {
 
 const hostByTool = {
   layers: 'content',
+  incidents: 'content',
   legend: 'inspector',
   feature: 'inspector',
   drawing: 'content',

@@ -40,3 +40,26 @@ test('provides visible boot and map-engine loading feedback', async () => {
   assert.match(appView, /v-if="!mapReady"/);
   assert.match(mapView, /v-if="isEngineLoading"/);
 });
+
+test('keeps incident initialization after async map workspace recovery without a synchronous Cesium path', async () => {
+  const [main, appView] = await Promise.all([
+    readProjectFile('src/main.ts'),
+    readProjectFile('src/views/AppView.vue'),
+  ]);
+
+  assert.doesNotMatch(main, /incidents\/presentation|CesiumManager|from\s+['"]cesium/);
+  assert.doesNotMatch(appView, /import\s+\{\s*CesiumManager\s*\}\s+from|from\s+['"]cesium/);
+  assert.match(appView, /provide\(incidentContextKey, incidentWorkspace\)/);
+  assert.ok(appView.indexOf('await context.loadDemoData();') < appView.indexOf('await incidentWorkspace.hydrate();'));
+});
+
+test('documents the local event workspace boundary and reset path', async () => {
+  const readme = await readProjectFile('README.md');
+
+  assert.match(readme, /空间事件处置/);
+  assert.match(readme, /IndexedDB/);
+  assert.match(readme, /演示角色/);
+  assert.match(readme, /不提供真实登录/);
+  assert.match(readme, /不提供跨浏览器同步/);
+  assert.match(readme, /重置本地事件演示数据/);
+});

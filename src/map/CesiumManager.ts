@@ -52,6 +52,8 @@ import {
 } from '@/map/cesium/drawing';
 import type { CesiumPlaybackHost } from '@/map/cesium/playback';
 import type { CesiumRealtimeHost } from '@/map/cesium/realtime';
+import type { IncidentCaptureMode } from '@/incidents/presentation/incidentGeometryCaptureTask';
+import type { IncidentGeometryCaptureProgress, IncidentGeometryCaptureRequest } from '@/map/facade/types';
 
 export class CesiumManager {
   private readonly viewer: Cesium.Viewer;
@@ -80,6 +82,12 @@ export class CesiumManager {
   private spatialQueryCallback?: (extent: [number, number, number, number]) => void;
   private userInteractHandler?: () => void;
   private userPointerDownListener?: () => void;
+  private geometryCaptureMode?: IncidentCaptureMode;
+  private geometryCapturePositions: Cesium.Cartesian3[] = [];
+  private geometryCaptureCursor?: Cesium.Cartesian3;
+  private readonly geometryCapturePreviewEntities: Cesium.Entity[] = [];
+  private readonly geometryCaptureReferenceEntities: Cesium.Entity[] = [];
+  private geometryCaptureRequest?: IncidentGeometryCaptureRequest;
 
   constructor(
     target: HTMLElement,
@@ -131,6 +139,7 @@ export class CesiumManager {
   }
 
   startSpatialQuery(onExtent: (extent: [number, number, number, number]) => void) {
+    this.cancelIncidentGeometryCapture();
     startSpatialQueryModule(this.spatialHost, onExtent, () => {
       this.interactionHandler.setInputAction(
         (event: { position: Cesium.Cartesian2 }) => beginSpatialQuery(this.spatialHost, event.position),
@@ -183,8 +192,176 @@ export class CesiumManager {
   }
 
   setDrawMode(mode?: DrawMode, layer?: LayerRecord) {
+    this.cancelIncidentGeometryCapture();
     return setDrawModeModule(this.drawingHost, mode, layer);
   }
+
+  /** Starts a temporary event-position task without creating an ordinary drawing feature. */
+  startIncidentGeometryCapture(request: IncidentGeometryCaptureRequest): void {
+    this.cancelIncidentGeometryCapture();
+    this.clearSpatialQuery();
+    this.clearDrawingInteraction();
+    this.geometryCaptureMode = request.mode;
+    this.geometryCaptureRequest = request;
+    this.geometryCapturePositions = [];
+    this.geometryCaptureCursor = undefined;
+    this.renderGeometryCaptureReference(request.referenceGeometry);
+    this.viewer.scene.screenSpaceCameraController.enableInputs = false;
+    this.interactionHandler.setInputAction(
+      (event: { position: Cesium.Cartesian2 }) => this.addGeometryCapturePosition(event.position),
+      Cesium.ScreenSpaceEventType.LEFT_CLICK,
+    );
+    this.interactionHandler.setInputAction(
+      (event: { endPosition: Cesium.Cartesian2 }) => this.updateGeometryCaptureCursor(event.endPosition),
+      Cesium.ScreenSpaceEventType.MOUSE_MOVE,
+    );
+    this.interactionHandler.setInputAction(() => this.finishIncidentGeometryCapture(), Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    this.interactionHandler.setInputAction(() => this.finishIncidentGeometryCapture(), Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    this.reportGeometryCaptureProgress();
+  }
+
+  setIncidentGeometryCaptureMode(mode: IncidentCaptureMode): void {
+    if (!this.geometryCaptureRequest) return;
+    this.geometryCaptureMode = mode;
+    this.geometryCapturePositions = [];
+    this.geometryCaptureCursor = undefined;
+    this.renderGeometryCapturePreview();
+    this.reportGeometryCaptureProgress();
+  }
+
+  undoIncidentGeometryCapture(): void {
+    if (this.geometryCaptureMode !== 'Polygon') return;
+    this.geometryCapturePositions.pop();
+    this.renderGeometryCapturePreview();
+    this.reportGeometryCaptureProgress();
+  }
+
+  finishIncidentGeometryCapture(): void {
+    const mode = this.geometryCaptureMode;
+    const request = this.geometryCaptureRequest;
+    if (!mode || !request) return;
+    if (mode === 'Polygon') {
+      if (this.geometryCapturePositions.length < 3) return;
+    }
+    const coordinates = this.geometryCapturePositions.map((position) => this.toGeometryCaptureCoordinate(position));
+    const geometry: GeoJSON.Geometry = mode === 'Point'
+      ? { type: 'Point', coordinates: coordinates[0] }
+      : { type: 'Polygon', coordinates: [[...coordinates, coordinates[0]]] };
+    this.clearGeometryCaptureInteraction();
+    request.onComplete(geometry);
+  }
+
+  cancelIncidentGeometryCapture(): void {
+    const request = this.geometryCaptureRequest;
+    if (!request && !this.geometryCaptureMode) return;
+    this.clearGeometryCaptureInteraction();
+    if (request) request.onCancel();
+  }
+
+  private addGeometryCapturePosition(screenPosition: Cesium.Cartesian2): void {
+    const position = pickDrawingPosition(this.drawingHost, screenPosition);
+    const mode = this.geometryCaptureMode;
+    if (!position || !mode) return;
+    if (mode === 'Point') {
+      this.geometryCapturePositions = [position];
+      this.finishIncidentGeometryCapture();
+      return;
+    }
+    this.geometryCapturePositions.push(position);
+    this.renderGeometryCapturePreview();
+    this.reportGeometryCaptureProgress();
+  }
+
+  private updateGeometryCaptureCursor(screenPosition: Cesium.Cartesian2): void {
+    if (this.geometryCaptureMode !== 'Polygon') return;
+    const position = pickDrawingPosition(this.drawingHost, screenPosition);
+    if (!position) return;
+    this.geometryCaptureCursor = position;
+    this.renderGeometryCapturePreview();
+  }
+
+  private toGeometryCaptureCoordinate(position: Cesium.Cartesian3): GeoJSON.Position {
+    const cartographic = Cesium.Cartographic.fromCartesian(position);
+    return [
+      Number(Cesium.Math.toDegrees(cartographic.longitude).toFixed(6)),
+      Number(Cesium.Math.toDegrees(cartographic.latitude).toFixed(6)),
+    ];
+  }
+
+  private getGeometryCaptureProgress(): IncidentGeometryCaptureProgress {
+    const mode = this.geometryCaptureMode ?? 'Point';
+    const vertexCount = mode === 'Polygon' ? this.geometryCapturePositions.length : 0;
+    return {
+      mode,
+      vertexCount,
+      canUndo: mode === 'Polygon' && vertexCount > 0,
+      canFinish: mode === 'Polygon' && vertexCount >= 3,
+    };
+  }
+
+  private reportGeometryCaptureProgress(): void {
+    const request = this.geometryCaptureRequest;
+    if (request) request.onProgress(this.getGeometryCaptureProgress());
+  }
+
+  private renderGeometryCaptureReference(geometry?: GeoJSON.Geometry): void {
+    this.geometryCaptureReferenceEntities.forEach((entity) => this.viewer.entities.remove(entity));
+    this.geometryCaptureReferenceEntities.length = 0;
+    if (!geometry) return;
+    if (geometry.type === 'Point') {
+      const [longitude, latitude] = geometry.coordinates;
+      this.geometryCaptureReferenceEntities.push(this.viewer.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(Number(longitude), Number(latitude)),
+        point: { pixelSize: 12, color: Cesium.Color.LIGHTSLATEGREY.withAlpha(0.32), outlineColor: Cesium.Color.LIGHTGREY, outlineWidth: 2 },
+      }));
+      return;
+    }
+    if (geometry.type !== 'Polygon') return;
+    const ring = geometry.coordinates[0] ?? [];
+    const degrees = ring.flatMap((coordinate) => [Number(coordinate[0]), Number(coordinate[1])]);
+    if (degrees.length < 6) return;
+    const positions = Cesium.Cartesian3.fromDegreesArray(degrees);
+    this.geometryCaptureReferenceEntities.push(this.viewer.entities.add({
+      polyline: { positions, width: 2, material: Cesium.Color.LIGHTGREY.withAlpha(0.8) },
+      polygon: { hierarchy: new Cesium.PolygonHierarchy(positions), material: Cesium.Color.LIGHTSLATEGREY.withAlpha(0.1) },
+    }));
+  }
+
+  private renderGeometryCapturePreview(): void {
+    this.geometryCapturePreviewEntities.forEach((entity) => this.viewer.entities.remove(entity));
+    this.geometryCapturePreviewEntities.length = 0;
+    if (this.geometryCaptureMode !== 'Polygon') return;
+    const positions = this.geometryCaptureCursor
+      ? [...this.geometryCapturePositions, this.geometryCaptureCursor]
+      : this.geometryCapturePositions;
+    if (positions.length < 2) return;
+    this.geometryCapturePreviewEntities.push(this.viewer.entities.add({
+      polyline: { positions: [...positions, positions[0]], width: 3, material: Cesium.Color.fromCssColorString('#fbbf24') },
+    }));
+    if (positions.length >= 3) {
+      this.geometryCapturePreviewEntities.push(this.viewer.entities.add({
+        polygon: { hierarchy: new Cesium.PolygonHierarchy(positions), material: Cesium.Color.fromCssColorString('#fbbf24').withAlpha(0.22) },
+      }));
+    }
+  }
+
+  private clearGeometryCaptureInteraction(): void {
+    this.interactionHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    this.interactionHandler.removeInputAction(Cesium.ScreenSpaceEventType.MOUSE_MOVE);
+    this.interactionHandler.removeInputAction(Cesium.ScreenSpaceEventType.LEFT_DOUBLE_CLICK);
+    this.interactionHandler.removeInputAction(Cesium.ScreenSpaceEventType.RIGHT_CLICK);
+    this.geometryCapturePreviewEntities.forEach((entity) => this.viewer.entities.remove(entity));
+    this.geometryCapturePreviewEntities.length = 0;
+    this.geometryCaptureReferenceEntities.forEach((entity) => this.viewer.entities.remove(entity));
+    this.geometryCaptureReferenceEntities.length = 0;
+    this.geometryCaptureMode = undefined;
+    this.geometryCapturePositions = [];
+    this.geometryCaptureCursor = undefined;
+    this.geometryCaptureRequest = undefined;
+    this.viewer.scene.screenSpaceCameraController.enableInputs = true;
+    this.restorePickInteraction();
+  }
+
 
   deleteSelectedDrawingFeatures(layer?: LayerRecord) {
     return deleteSelectedDrawingFeaturesModule(this.drawingHost, layer);
@@ -230,6 +407,7 @@ export class CesiumManager {
   }
 
   destroy() {
+    this.cancelIncidentGeometryCapture();
     if (this.userPointerDownListener) this.viewer.scene.canvas.removeEventListener("pointerdown", this.userPointerDownListener);
     this.clearSpatialQuery();
     this.clearDrawingInteraction();

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { toolIds, toolTitles } from '../src/tools/toolMeta.ts';
+import { getBottomDrawerTabForTool, getToolHost, getSectionForTool } from '../src/layout/workbenchNavigation.ts';
 
 test('tool metadata lists every tool id with a title', () => {
   assert.ok(toolIds.length > 0);
@@ -35,4 +36,12 @@ test('map facade method names stay stable', () => {
   ];
   assert.equal(methods.length, 18);
   assert.equal(new Set(methods).size, methods.length);
+});
+
+test('incident workspace retains one content ToolId while event history stays outside the registry', () => {
+  assert.ok(toolIds.includes('incidents'));
+  assert.equal(getSectionForTool('incidents'), 'incidents');
+  assert.equal(getToolHost('incidents'), 'content');
+  assert.equal(getBottomDrawerTabForTool('incidents'), undefined);
+  assert.equal(toolIds.includes('incidentTimeline'), false);
 });

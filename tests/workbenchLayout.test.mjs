@@ -118,3 +118,48 @@ test('releases inspector occupation when tool closes and falls back to selection
   assert.equal(layout.inspectorTarget.value, 'layer');
   assert.equal(selection.cleared, 0);
 });
+
+test('opens an incident timeline drawer without replacing the active incident content tool', () => {
+  const controller = createToolController();
+  const layout = useWorkbenchLayout({ ...controller, selection: createSelectionController() });
+
+  layout.openWorkbenchTool('incidents');
+  layout.openBottomDrawer('incidentTimeline');
+
+  assert.equal(controller.activeTool.value, 'incidents');
+  assert.equal(layout.activeSection.value, 'incidents');
+  assert.equal(layout.contentPanelOpen.value, true);
+  assert.equal(layout.bottomDrawerTab.value, 'incidentTimeline');
+
+  layout.closeBottomDrawer();
+  assert.equal(controller.activeTool.value, 'incidents');
+  assert.equal(layout.bottomDrawerTab.value, undefined);
+});
+
+test('derives the incident inspector from unified incident selection', async () => {
+  const controller = createToolController();
+  const selection = createSelectionController();
+  const layout = useWorkbenchLayout({ ...controller, selection });
+
+  selection.current.value = { kind: 'incident', incidentId: 'incident-42' };
+  await nextTick();
+
+  assert.equal(layout.inspectorTarget.value, 'incident');
+  layout.closeInspector();
+  assert.equal(selection.cleared, 1);
+});
+test('closes an incident timeline without clearing the selected incident or closing its content workspace', () => {
+  const controller = createToolController();
+  const selection = createSelectionController({ kind: 'incident', incidentId: 'incident-42' });
+  const layout = useWorkbenchLayout({ ...controller, selection });
+
+  layout.openWorkbenchTool('incidents');
+  layout.openBottomDrawer('incidentTimeline');
+  layout.closeBottomDrawer();
+
+  assert.equal(controller.activeTool.value, 'incidents');
+  assert.deepEqual(selection.current.value, { kind: 'incident', incidentId: 'incident-42' });
+  assert.equal(selection.cleared, 0);
+  assert.equal(layout.contentPanelOpen.value, true);
+  assert.equal(layout.bottomDrawerTab.value, undefined);
+});
